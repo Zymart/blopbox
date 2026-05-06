@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Blopbox Gaming Marketplace</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="auth-loading">
+    <div class="login-gate" id="loginGate" hidden>
+      <section class="login-panel" aria-labelledby="loginTitle">
+        <div class="login-content">
+          <div class="login-brand">
+            <img class="brand-mark" src="blopbox-profile.svg" alt="" aria-hidden="true">
+            <span>Blopbox</span>
+          </div>
+          <div>
+            <p class="eyebrow">Secure marketplace</p>
+            <h1 id="loginTitle">BLOP<span>BOX</span></h1>
+            <p class="login-copy">Login with Discord or Google to buy, sell, and trade game items, accounts, boosts, and collectibles in one secure place.</p>
+          </div>
+          <div class="auth-actions">
+            <a class="primary-button auth-button" id="discordLoginButton" href="/auth/discord">Continue with Discord</a>
+            <a class="ghost-button auth-button" id="googleLoginButton" href="/auth/google">Continue with Google</a>
+          </div>
+          <p class="auth-status" id="authStatus" role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="login-showcase" aria-hidden="true">
+          <div class="showcase-glow"></div>
+          <div class="showcase-avatar">
+            <span class="avatar-face"></span>
+            <span class="avatar-cap">BLOPBOX</span>
+          </div>
+          <div class="showcase-crate">
+            <span></span>
+          </div>
+          <div class="floating-card card-one">
+            <strong>Mythic Skin</strong>
+            <span>$24.99</span>
+          </div>
+          <div class="floating-card card-two">
+            <strong>Rank Boost</strong>
+            <span>$15.50</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="account-controls" id="accountControls" hidden>
+          <div class="user-chip" id="userChip">
+            <img id="userAvatar" alt="" referrerpolicy="no-referrer" hidden>
+            <span id="userName">Signed in</span>
+            <small id="userProvider"></small>
+          </div>
+          <button class="ghost-button logout-button" id="logoutButton" type="button">Log out</button>
+        </div>
+
+        <a class="brand" href="/" aria-label="Blopbox home">
+          <img class="brand-mark" src="blopbox-profile.svg" alt="" aria-hidden="true">
+          <span>Blopbox</span>
+        </a>
+
+        <nav class="nav-tabs" aria-label="Market navigation">
+          <button class="nav-tab active" type="button" data-mode="market">Home</button>
+          <button class="nav-tab" type="button" data-mode="drops">Browse</button>
+          <button class="nav-tab" type="button" data-mode="sellers">Sellers</button>
+        </nav>
+
+        <div class="top-actions">
+          <label class="search-control" for="searchInput">
+            <span class="visually-hidden">Search listings</span>
+            <input id="searchInput" type="search" placeholder="Search items...">
+          </label>
+          <button class="primary-button post-open-button" id="openPostButton" type="button">Post Listing</button>
+        </div>
+      </header>
+
+      <main class="market-layout">
+        <section class="listing-area" id="listings" aria-label="Blopbox listings">
+          <div class="section-header">
+            <div class="listing-board-title">
+              <h2>Posted Items</h2>
+              <p>All posts appear below as soon as you create them.</p>
+            </div>
+            <div class="listing-tools">
+              <div class="market-stats">
+                <span>Listings</span>
+                <strong id="listingCount">0</strong>
+              </div>
+              <label class="sort-control" for="sortSelect">
+                <span>Sort</span>
+                <select id="sortSelect">
+                  <option value="newest">Newest</option>
+                  <option value="priceLow">Price Low</option>
+                  <option value="priceHigh">Price High</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="product-grid" id="productGrid"></div>
+        </section>
+
+        <section class="hero-section" aria-labelledby="heroTitle">
+          <div class="hero-copy">
+            <p class="eyebrow">Gaming marketplace</p>
+            <h1 id="heroTitle">BLOP<span>BOX</span></h1>
+            <p class="hero-subtitle">Your ultimate marketplace for <span>all games</span></p>
+            <p class="hero-text">Buy, sell, and trade skins, items, game accounts, boosts, passes, and collectibles in one secure place.</p>
+            <div class="hero-actions">
+              <button class="primary-button" id="browseHeroButton" type="button">Browse Items</button>
+              <button class="ghost-button" id="sellHeroButton" type="button">Sell Now</button>
+            </div>
+            <div class="trust-row">
+              <div>
+                <strong>Secure Deals</strong>
+                <span>100% Safe</span>
+              </div>
+              <div>
+                <strong>Trusted by Players</strong>
+                <span>10K+ Users</span>
+              </div>
+              <div>
+                <strong>Top Rated</strong>
+                <span>4.9/5 Rating</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="hero-visual" aria-hidden="true">
+            <div class="hero-glow"></div>
+            <div class="crystal-sword"></div>
+            <div class="market-avatar">
+              <span class="avatar-head"></span>
+              <span class="avatar-body">BLOP<span>BOX</span></span>
+            </div>
+            <div class="loot-chest">
+              <span class="chest-cube"></span>
+            </div>
+            <div class="item-preview preview-a">
+              <strong>Legendary Loadout</strong>
+              <span>$24.99</span>
+            </div>
+            <div class="item-preview preview-b">
+              <strong>Account Bundle</strong>
+              <span>$15.50</span>
+            </div>
+            <div class="item-preview preview-c">
+              <strong>Rare Collectible</strong>
+              <span>$35.00</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="value-strip" aria-label="Marketplace benefits">
+          <div>
+            <span class="value-icon">Bag</span>
+            <strong>Huge Selection</strong>
+            <p>Thousands of items and accounts</p>
+          </div>
+          <div>
+            <span class="value-icon">$</span>
+            <strong>Best Prices</strong>
+            <p>Competitive prices every day</p>
+          </div>
+          <div>
+            <span class="value-icon">Safe</span>
+            <strong>Safe & Secure</strong>
+            <p>Protected trades and support</p>
+          </div>
+          <div>
+            <span class="value-icon">Fast</span>
+            <strong>Instant Delivery</strong>
+            <p>Get your items instantly</p>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
+    <div class="post-overlay" id="postOverlay" hidden>
+      <aside class="post-panel" id="postListing" aria-label="Post a listing">
+        <div class="modal-header">
+          <div>
+            <span class="panel-kicker">Post</span>
+            <h2>Create a Listing</h2>
+          </div>
+          <button class="icon-button" id="closePostButton" type="button" aria-label="Close post form">x</button>
+        </div>
+
+        <form class="listing-form" id="listingForm">
+          <label>
+            Item name
+            <input id="itemTitle" type="text" maxlength="60" placeholder="Skin, boost, account, pass, or item" required>
+          </label>
+
+          <label>
+            Seller name
+            <input id="itemSeller" type="text" maxlength="32" placeholder="Your player name" required>
+          </label>
+
+          <div class="form-grid">
+            <label>
+              Hashtags
+              <input id="itemTags" type="text" maxlength="80" placeholder="#skin #boost #fps #mmorpg" required>
+            </label>
+
+            <label>
+              Price
+              <input id="itemPrice" type="number" min="1" max="9999" step="1" placeholder="25" required>
+            </label>
+          </div>
+
+          <label>
+            Upload image
+            <input class="file-input" id="itemImageFile" type="file" accept="image/*">
+            <span class="upload-button" id="uploadButton" tabindex="0">Choose Image</span>
+            <span class="field-hint" id="uploadFileName">Choose from phone gallery, camera roll, or laptop files.</span>
+          </label>
+
+          <label>
+            Details
+            <textarea id="itemDetails" maxlength="140" placeholder="Short note about the item"></textarea>
+          </label>
+
+          <button class="primary-button" type="submit">Post to Market</button>
+        </form>
+      </aside>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

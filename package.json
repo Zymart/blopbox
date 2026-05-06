@@ -1,0 +1,17 @@
+{
+  "name": "blopbox-market",
+  "version": "1.0.0",
+  "description": "Green and black public marketplace website.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "marketplace",
+    "blopbox",
+    "market"
+  ],
+  "author": "",
+  "license": "MIT"
+}
