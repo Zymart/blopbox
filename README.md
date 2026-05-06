@@ -30,6 +30,7 @@ http://localhost:3000/auth/google/callback
 
 Products are saved through `/api/products`. Local development writes them to `data/products.json`, and Cloudflare Pages writes them to a KV namespace.
 Each signed-in account can post up to 3 products.
+Only the product owner can remove a product. Other clients can open product details, view seller ratings, and leave comments.
 
 ## Cloudflare Pages
 

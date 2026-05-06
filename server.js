@@ -32,6 +32,7 @@ const DATA_DIR = path.join(__dirname, "data");
 const PRODUCTS_FILE = path.join(DATA_DIR, "products.json");
 const MAX_PRODUCTS = 250;
 const MAX_PRODUCTS_PER_USER = 3;
+const MAX_COMMENTS_PER_PRODUCT = 120;
 const MAX_IMAGE_LENGTH = 3_000_000;
 const sessions = new Map();
 const oauthStates = new Map();
@@ -298,7 +299,8 @@ function normalizeStoredProduct(product) {
     tag: cleanText(product.tag, 24) || "Post",
     createdAt: normalizeTimestamp(product.createdAt),
     ownerId: cleanText(product.ownerId, 120),
-    ownerName: cleanText(product.ownerName, 80)
+    ownerName: cleanText(product.ownerName, 80),
+    comments: normalizeComments(product.comments)
   };
 }
 
@@ -308,7 +310,8 @@ function sanitizeProduct(input, user) {
     id: cleanId(input && input.id) || `product-${Date.now()}-${crypto.randomBytes(5).toString("hex")}`,
     tag: "Post",
     ownerId: userKey(user),
-    ownerName: user.globalName || user.username || "Seller"
+    ownerName: user.globalName || user.username || "Seller",
+    comments: []
   });
 }
 
@@ -361,7 +364,55 @@ function userKey(user) {
 }
 
 function canManageProduct(product, user) {
-  return !product.ownerId || product.ownerId === userKey(user);
+  return Boolean(product.ownerId) && product.ownerId === userKey(user);
+}
+
+function normalizeComments(comments) {
+  if (!Array.isArray(comments)) return [];
+
+  return comments
+    .map((comment) => {
+      if (!comment || typeof comment !== "object") return null;
+      const id = cleanId(comment.id);
+      const text = cleanText(comment.text, 220);
+      const rating = normalizeRating(comment.rating);
+      const authorId = cleanText(comment.authorId, 120);
+      const authorName = cleanText(comment.authorName, 80);
+      if (!id || !text || !rating || !authorId || !authorName) return null;
+
+      return {
+        id,
+        text,
+        rating,
+        authorId,
+        authorName,
+        createdAt: normalizeTimestamp(comment.createdAt)
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, MAX_COMMENTS_PER_PRODUCT);
+}
+
+function normalizeRating(value) {
+  const rating = Math.round(Number(value));
+  if (!Number.isFinite(rating)) return 0;
+  return Math.max(1, Math.min(5, rating));
+}
+
+function sanitizeComment(input, user) {
+  const text = cleanText(input && input.text, 220);
+  const rating = normalizeRating(input && input.rating);
+  if (!text || !rating) return null;
+
+  return {
+    id: `comment-${Date.now()}-${crypto.randomBytes(5).toString("hex")}`,
+    text,
+    rating,
+    authorId: userKey(user),
+    authorName: user.globalName || user.username || "User",
+    createdAt: Date.now()
+  };
 }
 
 function userProductCount(products, user, ignoredProductId = "") {
@@ -369,6 +420,40 @@ function userProductCount(products, user, ignoredProductId = "") {
   return products.filter((product) => {
     return product.ownerId === ownerId && product.id !== ignoredProductId;
   }).length;
+}
+
+async function handleProductComment(req, res) {
+  const session = readSession(req);
+  if (!session) {
+    return json(res, 401, { error: "Sign in first." });
+  }
+
+  try {
+    const body = await readJsonBody(req);
+    const productId = cleanId(body.productId);
+    const comment = sanitizeComment(body, session.user);
+    if (!productId || !comment) {
+      return json(res, 400, { error: "Add a rating and comment first." });
+    }
+
+    const products = await readProducts();
+    const index = products.findIndex((product) => product.id === productId);
+    if (index === -1) return json(res, 404, { error: "Product was not found." });
+    if (canManageProduct(products[index], session.user)) {
+      return json(res, 403, { error: "You cannot rate your own product." });
+    }
+
+    const product = {
+      ...products[index],
+      comments: [comment, ...(products[index].comments || [])].slice(0, MAX_COMMENTS_PER_PRODUCT)
+    };
+    const next = products.slice();
+    next[index] = product;
+    await writeProducts(next);
+    return json(res, 201, { product, comment });
+  } catch (error) {
+    return json(res, error.statusCode || 500, { error: error.message || "Could not save comment." });
+  }
 }
 
 function readJsonBody(req, maxBytes = 4 * 1024 * 1024) {
@@ -754,6 +839,10 @@ async function router(req, res) {
 
   if (url.pathname === "/api/products") {
     return handleProducts(req, res, url);
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/products/comment") {
+    return handleProductComment(req, res);
   }
 
   if (req.method === "GET" && url.pathname === "/auth/discord") {

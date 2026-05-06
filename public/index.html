@@ -231,6 +231,67 @@
       </aside>
     </div>
 
+    <div class="details-overlay" id="detailsOverlay" hidden>
+      <aside class="details-panel" aria-labelledby="detailsTitle">
+        <div class="modal-header">
+          <div>
+            <span class="panel-kicker">Product</span>
+            <h2 id="detailsTitle">Product Details</h2>
+          </div>
+          <button class="icon-button" id="closeDetailsButton" type="button" aria-label="Close product details">x</button>
+        </div>
+
+        <div class="details-layout">
+          <div class="details-media">
+            <img id="detailsImage" alt="">
+          </div>
+
+          <div class="details-content">
+            <div class="details-price-row">
+              <strong id="detailsPrice">$0</strong>
+              <span id="detailsAge"></span>
+            </div>
+            <div class="details-tags" id="detailsTags"></div>
+            <p class="details-copy" id="detailsCopy"></p>
+
+            <section class="details-section" aria-labelledby="sellerTitle">
+              <h3 id="sellerTitle">Seller</h3>
+              <div class="seller-summary">
+                <div>
+                  <strong id="detailsSeller">Seller</strong>
+                  <span id="detailsSellerMeta"></span>
+                </div>
+                <div class="rating-pill" id="sellerRating">No ratings yet</div>
+              </div>
+            </section>
+
+            <section class="details-section" aria-labelledby="commentsTitle">
+              <h3 id="commentsTitle">Comments</h3>
+              <div class="comments-list" id="commentsList"></div>
+              <form class="comment-form" id="commentForm">
+                <label>
+                  Rating
+                  <select id="commentRating">
+                    <option value="5">5 - Excellent</option>
+                    <option value="4">4 - Good</option>
+                    <option value="3">3 - Okay</option>
+                    <option value="2">2 - Poor</option>
+                    <option value="1">1 - Bad</option>
+                  </select>
+                </label>
+                <label>
+                  Comment
+                  <textarea id="commentText" maxlength="220" placeholder="Share a short note about the seller or product"></textarea>
+                </label>
+                <button class="primary-button" type="submit">Post Comment</button>
+              </form>
+              <p class="field-hint" id="commentHint"></p>
+            </section>
+          </div>
+        </div>
+      </aside>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="/app.js"></script>

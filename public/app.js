@@ -11,6 +11,7 @@ const state = {
   query: "",
   sort: "newest",
   listings: [],
+  activeListingId: "",
   user: null
 };
 
@@ -18,7 +19,22 @@ const elements = {
   accountControls: document.querySelector("#accountControls"),
   authStatus: document.querySelector("#authStatus"),
   browseHeroButton: document.querySelector("#browseHeroButton"),
+  closeDetailsButton: document.querySelector("#closeDetailsButton"),
   closePostButton: document.querySelector("#closePostButton"),
+  commentForm: document.querySelector("#commentForm"),
+  commentHint: document.querySelector("#commentHint"),
+  commentRating: document.querySelector("#commentRating"),
+  commentText: document.querySelector("#commentText"),
+  commentsList: document.querySelector("#commentsList"),
+  detailsAge: document.querySelector("#detailsAge"),
+  detailsCopy: document.querySelector("#detailsCopy"),
+  detailsImage: document.querySelector("#detailsImage"),
+  detailsOverlay: document.querySelector("#detailsOverlay"),
+  detailsPrice: document.querySelector("#detailsPrice"),
+  detailsSeller: document.querySelector("#detailsSeller"),
+  detailsSellerMeta: document.querySelector("#detailsSellerMeta"),
+  detailsTags: document.querySelector("#detailsTags"),
+  detailsTitle: document.querySelector("#detailsTitle"),
   discordLoginButton: document.querySelector("#discordLoginButton"),
   googleLoginButton: document.querySelector("#googleLoginButton"),
   itemDetails: document.querySelector("#itemDetails"),
@@ -39,6 +55,7 @@ const elements = {
   searchInput: document.querySelector("#searchInput"),
   sellHeroButton: document.querySelector("#sellHeroButton"),
   sortSelect: document.querySelector("#sortSelect"),
+  sellerRating: document.querySelector("#sellerRating"),
   toast: document.querySelector("#toast"),
   uploadButton: document.querySelector("#uploadButton"),
   uploadFileName: document.querySelector("#uploadFileName"),
@@ -67,19 +84,30 @@ function bindControls() {
     document.querySelector("#listings").scrollIntoView({ behavior: "smooth", block: "start" });
   });
   elements.closePostButton.addEventListener("click", closePostForm);
+  elements.closeDetailsButton.addEventListener("click", closeDetails);
   elements.logoutButton.addEventListener("click", logout);
 
   elements.postOverlay.addEventListener("click", (event) => {
     if (event.target === elements.postOverlay) closePostForm();
   });
 
+  elements.detailsOverlay.addEventListener("click", (event) => {
+    if (event.target === elements.detailsOverlay) closeDetails();
+  });
+
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !elements.postOverlay.hidden) closePostForm();
+    if (event.key === "Escape" && !elements.detailsOverlay.hidden) closeDetails();
   });
 
   elements.listingForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     await addListing();
+  });
+
+  elements.commentForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await addComment();
   });
 
   elements.itemImageFile.addEventListener("change", () => {
@@ -453,6 +481,126 @@ function closePostForm() {
   elements.postOverlay.hidden = true;
 }
 
+function openDetails(listingId) {
+  state.activeListingId = listingId;
+  renderDetails();
+  elements.detailsOverlay.hidden = false;
+}
+
+function closeDetails() {
+  elements.detailsOverlay.hidden = true;
+  state.activeListingId = "";
+  elements.commentForm.reset();
+}
+
+function activeListing() {
+  return state.listings.find((listing) => listing.id === state.activeListingId) || null;
+}
+
+function renderDetails() {
+  const listing = activeListing();
+  if (!listing) {
+    closeDetails();
+    return;
+  }
+
+  const comments = getListingComments(listing);
+  const sellerStats = sellerRatingStats(listing);
+  const sellerMeta = listing.ownerName || listing.seller || "Seller";
+  const isOwner = canRemoveListing(listing);
+
+  elements.detailsTitle.textContent = listing.title || "Product Details";
+  elements.detailsImage.onerror = () => {
+    elements.detailsImage.onerror = null;
+    elements.detailsImage.src = PLACEHOLDER_IMAGE;
+  };
+  elements.detailsImage.src = validImageUrl(listing.image);
+  elements.detailsImage.alt = listing.title || "Product image";
+  elements.detailsPrice.textContent = money(Number(listing.price) || 0);
+  elements.detailsAge.textContent = timeAgo(Number(listing.createdAt) || Date.now());
+  elements.detailsCopy.textContent = listing.details || "No extra details yet.";
+  elements.detailsSeller.textContent = listing.seller || sellerMeta;
+  elements.detailsSellerMeta.textContent = sellerMeta;
+  elements.sellerRating.textContent = sellerStats.count
+    ? `${stars(Math.round(sellerStats.average))} ${sellerStats.average.toFixed(1)} (${sellerStats.count})`
+    : "No ratings yet";
+
+  elements.detailsTags.innerHTML = "";
+  for (const tag of getListingTags(listing)) {
+    const badge = document.createElement("span");
+    badge.textContent = tag;
+    elements.detailsTags.append(badge);
+  }
+
+  renderComments(comments);
+  elements.commentForm.hidden = isOwner;
+  elements.commentHint.textContent = isOwner
+    ? "You own this product, so only other clients can leave ratings and comments."
+    : "";
+}
+
+function renderComments(comments) {
+  elements.commentsList.innerHTML = "";
+
+  if (comments.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "comment-empty";
+    empty.textContent = "No comments yet.";
+    elements.commentsList.append(empty);
+    return;
+  }
+
+  for (const comment of comments) {
+    const card = document.createElement("article");
+    const header = document.createElement("div");
+    const author = document.createElement("strong");
+    const meta = document.createElement("span");
+    const text = document.createElement("p");
+
+    card.className = "comment-card";
+    header.className = "comment-header";
+    author.textContent = comment.authorName || "User";
+    meta.textContent = `${stars(comment.rating)} ${timeAgo(Number(comment.createdAt) || Date.now())}`;
+    text.textContent = comment.text || "";
+
+    header.append(author, meta);
+    card.append(header, text);
+    elements.commentsList.append(card);
+  }
+}
+
+async function addComment() {
+  if (!requireAuth()) return;
+  const listing = activeListing();
+  if (!listing) return;
+  if (canRemoveListing(listing)) {
+    toast("You cannot rate your own product.");
+    return;
+  }
+
+  const text = elements.commentText.value.trim();
+  const rating = Number(elements.commentRating.value);
+  if (!text || !Number.isFinite(rating)) {
+    toast("Add a rating and comment first.");
+    return;
+  }
+
+  try {
+    const saved = await sendJson("/api/products/comment", "POST", {
+      productId: listing.id,
+      rating,
+      text
+    });
+    if (saved && saved.product) replaceListing(saved.product);
+    elements.commentForm.reset();
+    renderListings();
+    renderDetails();
+    toast("Comment posted.");
+  } catch (error) {
+    toast(error.message || "Could not post comment.");
+  }
+}
+
 async function addListing() {
   if (!requireAuth()) return;
   if (!canPostProduct()) {
@@ -488,7 +636,10 @@ async function addListing() {
     details,
     image,
     tag: "Post",
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    ownerId: currentUserKey(),
+    ownerName: state.user.globalName || state.user.username || "Seller",
+    comments: []
   };
 
   let postMessage = "Product posted to Blopbox.";
@@ -588,6 +739,8 @@ function renderListings() {
 
   for (const listing of visible) {
     const card = listingCard(listing);
+    const detailsButton = card.querySelector(".details-button");
+    if (detailsButton) detailsButton.addEventListener("click", () => openDetails(listing.id));
     const removeButton = card.querySelector(".delete-button");
     if (removeButton) removeButton.addEventListener("click", () => removeListing(listing.id));
     elements.productGrid.append(card);
@@ -610,6 +763,8 @@ function listingCard(listing) {
   const sellerRow = document.createElement("div");
   const sellerLabel = document.createElement("span");
   const seller = document.createElement("strong");
+  const actions = document.createElement("div");
+  const detailsButton = document.createElement("button");
   const remove = document.createElement("button");
 
   card.className = "product-card";
@@ -620,6 +775,8 @@ function listingCard(listing) {
   meta.className = "product-meta";
   details.className = "listing-details";
   sellerRow.className = "seller-row";
+  actions.className = "card-actions";
+  detailsButton.className = "details-button";
   remove.className = "delete-button full-width";
 
   image.src = validImageUrl(listing.image);
@@ -637,6 +794,8 @@ function listingCard(listing) {
   details.textContent = listing.details || "Posted product.";
   sellerLabel.textContent = "Seller";
   seller.textContent = listing.seller || "Player";
+  detailsButton.type = "button";
+  detailsButton.textContent = "See Details";
   remove.type = "button";
   remove.setAttribute("aria-label", "Remove product");
   remove.textContent = "Remove";
@@ -646,7 +805,9 @@ function listingCard(listing) {
   meta.append(tags, age);
   sellerRow.append(sellerLabel, seller);
   body.append(titleRow, meta, details, sellerRow);
-  if (canRemoveListing(listing)) body.append(remove);
+  actions.append(detailsButton);
+  if (canRemoveListing(listing)) actions.append(remove);
+  body.append(actions);
   card.append(media, body);
   return card;
 }
@@ -700,6 +861,7 @@ async function removeListing(listingId) {
   try {
     await fetchJson(`/api/products?id=${encodeURIComponent(listingId)}`, { method: "DELETE" });
     removeLocalListing(listingId);
+    if (state.activeListingId === listingId) closeDetails();
     toast("Product removed.");
   } catch (error) {
     state.listings = previous;
@@ -724,6 +886,37 @@ function getListingTags(listing) {
   if (Array.isArray(listing.tags) && listing.tags.length > 0) return listing.tags;
   if (listing.category) return normalizeTags(listing.category);
   return ["#item"];
+}
+
+function getListingComments(listing) {
+  if (!Array.isArray(listing.comments)) return [];
+  return listing.comments
+    .filter((comment) => comment && comment.text)
+    .sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
+}
+
+function sellerRatingStats(listing) {
+  const sellerKey = listing.ownerId || "";
+  const sellerName = String(listing.seller || "").toLowerCase();
+  const ratings = [];
+
+  for (const product of state.listings) {
+    const sameSeller = sellerKey
+      ? product.ownerId === sellerKey
+      : String(product.seller || "").toLowerCase() === sellerName;
+    if (!sameSeller) continue;
+
+    for (const comment of getListingComments(product)) {
+      const rating = Number(comment.rating);
+      if (Number.isFinite(rating) && rating > 0) ratings.push(rating);
+    }
+  }
+
+  const total = ratings.reduce((sum, rating) => sum + rating, 0);
+  return {
+    count: ratings.length,
+    average: ratings.length ? total / ratings.length : 0
+  };
 }
 
 function readListings() {
@@ -765,10 +958,18 @@ function mergeListings(...groups) {
   });
 }
 
+function replaceListing(product) {
+  state.listings = mergeListings([product], state.listings.filter((listing) => listing.id !== product.id));
+}
+
+function currentUserKey() {
+  if (!state.user) return "";
+  return `${state.user.provider || "account"}:${state.user.id || state.user.email || state.user.username || "unknown"}`;
+}
+
 function canRemoveListing(listing) {
   if (!state.user) return false;
-  if (!listing.ownerId) return true;
-  return listing.ownerId === `${state.user.provider || "account"}:${state.user.id || state.user.email || state.user.username || "unknown"}`;
+  return Boolean(listing.ownerId) && listing.ownerId === currentUserKey();
 }
 
 function userProductCount() {
@@ -790,6 +991,11 @@ function renderPostLimit() {
     : `${remaining} product post${remaining === 1 ? "" : "s"} left.`;
   elements.sellHeroButton.disabled = disabled;
   elements.sellHeroButton.title = elements.openPostButton.title;
+}
+
+function stars(rating) {
+  const filled = Math.max(0, Math.min(5, Math.round(Number(rating) || 0)));
+  return `${"★".repeat(filled)}${"☆".repeat(5 - filled)}`;
 }
 
 function money(amount) {

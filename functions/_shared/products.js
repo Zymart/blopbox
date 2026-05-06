@@ -3,6 +3,7 @@ import { readSession } from "./oauth.js";
 const STORAGE_KEY = "products";
 const MAX_PRODUCTS = 250;
 const MAX_PRODUCTS_PER_USER = 3;
+const MAX_COMMENTS_PER_PRODUCT = 120;
 const MAX_IMAGE_LENGTH = 3_000_000;
 
 export async function handleProducts(context) {
@@ -66,6 +67,43 @@ export async function handleProducts(context) {
   return json({ error: "Method not allowed" }, 405);
 }
 
+export async function handleProductComment(context) {
+  const session = await readSession(context.request, context.env);
+  if (!session) return json({ error: "Sign in first." }, 401);
+
+  const store = productStore(context.env);
+  if (!store) {
+    return json({ error: "Cloudflare product storage is not connected yet." }, 503);
+  }
+
+  try {
+    const body = await context.request.json();
+    const productId = cleanId(body.productId);
+    const comment = sanitizeComment(body, session.user);
+    if (!productId || !comment) {
+      return json({ error: "Add a rating and comment first." }, 400);
+    }
+
+    const { products } = await readProducts(context.env);
+    const index = products.findIndex((product) => product.id === productId);
+    if (index === -1) return json({ error: "Product was not found." }, 404);
+    if (canManageProduct(products[index], session.user)) {
+      return json({ error: "You cannot rate your own product." }, 403);
+    }
+
+    const product = {
+      ...products[index],
+      comments: [comment, ...(products[index].comments || [])].slice(0, MAX_COMMENTS_PER_PRODUCT)
+    };
+    const next = products.slice();
+    next[index] = product;
+    await store.put(STORAGE_KEY, JSON.stringify(next));
+    return json({ product, comment }, 201);
+  } catch (error) {
+    return json({ error: error.message || "Could not save comment." }, 400);
+  }
+}
+
 async function readProducts(env) {
   const store = productStore(env);
   if (!store) return { products: [], configured: false };
@@ -85,7 +123,8 @@ function sanitizeProduct(input, user) {
     id: cleanId(input && input.id) || `product-${Date.now()}-${randomId()}`,
     tag: "Post",
     ownerId: userKey(user),
-    ownerName: user.globalName || user.username || "Seller"
+    ownerName: user.globalName || user.username || "Seller",
+    comments: []
   });
 }
 
@@ -108,7 +147,8 @@ function normalizeStoredProduct(product) {
     tag: cleanText(product.tag, 24) || "Post",
     createdAt: normalizeTimestamp(product.createdAt),
     ownerId: cleanText(product.ownerId, 120),
-    ownerName: cleanText(product.ownerName, 80)
+    ownerName: cleanText(product.ownerName, 80),
+    comments: normalizeComments(product.comments)
   };
 }
 
@@ -161,7 +201,55 @@ function userKey(user) {
 }
 
 function canManageProduct(product, user) {
-  return !product.ownerId || product.ownerId === userKey(user);
+  return Boolean(product.ownerId) && product.ownerId === userKey(user);
+}
+
+function normalizeComments(comments) {
+  if (!Array.isArray(comments)) return [];
+
+  return comments
+    .map((comment) => {
+      if (!comment || typeof comment !== "object") return null;
+      const id = cleanId(comment.id);
+      const text = cleanText(comment.text, 220);
+      const rating = normalizeRating(comment.rating);
+      const authorId = cleanText(comment.authorId, 120);
+      const authorName = cleanText(comment.authorName, 80);
+      if (!id || !text || !rating || !authorId || !authorName) return null;
+
+      return {
+        id,
+        text,
+        rating,
+        authorId,
+        authorName,
+        createdAt: normalizeTimestamp(comment.createdAt)
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, MAX_COMMENTS_PER_PRODUCT);
+}
+
+function normalizeRating(value) {
+  const rating = Math.round(Number(value));
+  if (!Number.isFinite(rating)) return 0;
+  return Math.max(1, Math.min(5, rating));
+}
+
+function sanitizeComment(input, user) {
+  const text = cleanText(input && input.text, 220);
+  const rating = normalizeRating(input && input.rating);
+  if (!text || !rating) return null;
+
+  return {
+    id: `comment-${Date.now()}-${randomId()}`,
+    text,
+    rating,
+    authorId: userKey(user),
+    authorName: user.globalName || user.username || "User",
+    createdAt: Date.now()
+  };
 }
 
 function userProductCount(products, user, ignoredProductId = "") {
