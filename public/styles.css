@@ -25,6 +25,8 @@
 
 html {
   scroll-behavior: smooth;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -93,6 +95,12 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
+img,
+svg,
+canvas {
+  max-width: 100%;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -114,7 +122,7 @@ a {
   top: 10px;
   z-index: 20;
   display: grid;
-  grid-template-columns: minmax(300px, 0.92fr) minmax(170px, auto) auto minmax(360px, 1fr);
+  grid-template-columns: minmax(260px, 0.9fr) auto minmax(240px, auto) minmax(340px, 1fr);
   align-items: center;
   gap: 18px;
   min-height: 84px;
@@ -170,6 +178,8 @@ a {
   grid-auto-flow: column;
   gap: 18px;
   align-items: center;
+  justify-content: center;
+  min-width: 0;
 }
 
 .nav-tab {
@@ -987,6 +997,7 @@ p {
   color: var(--text);
   font-size: 1.05rem;
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .product-title-row strong {
@@ -1009,10 +1020,12 @@ p {
   margin-bottom: 0;
   color: var(--text-soft);
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .seller-row strong {
   color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 .delete-button {
@@ -1208,6 +1221,40 @@ p {
   display: flex;
 }
 
+@media (min-width: 1241px) {
+  .app-shell {
+    width: min(1440px, 100%);
+    padding-inline: 24px;
+  }
+
+  .topbar {
+    grid-template-columns: minmax(260px, 0.9fr) auto minmax(240px, auto) minmax(380px, 1fr);
+  }
+
+  .listing-area {
+    padding: 30px;
+  }
+
+  .product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 18px;
+  }
+
+  .hero-section {
+    grid-template-columns: minmax(430px, 0.86fr) minmax(520px, 1.14fr);
+    min-height: 620px;
+    padding: 64px 48px 36px;
+  }
+
+  .hero-section h1 {
+    font-size: 5.8rem;
+  }
+
+  .value-strip div {
+    padding: 22px 30px;
+  }
+}
+
 @media (max-width: 1240px) {
   .topbar {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1243,6 +1290,10 @@ p {
     grid-template-columns: 1fr;
   }
 
+  .hero-section {
+    gap: 10px;
+  }
+
   .hero-visual,
   .login-showcase {
     min-height: 460px;
@@ -1251,6 +1302,21 @@ p {
   .value-strip,
   .product-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .login-panel h1,
+  .hero-section h1 {
+    font-size: 4.4rem;
+  }
+
+  .hero-section {
+    padding: 46px 28px 28px;
+  }
+
+  .value-strip div {
+    padding: 18px 20px;
   }
 }
 
@@ -1266,7 +1332,15 @@ p {
       calc(20px + env(safe-area-inset-bottom, 0px));
   }
 
+  .login-gate {
+    min-height: 100dvh;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 10px
+      calc(10px + env(safe-area-inset-bottom, 0px));
+    place-items: start center;
+  }
+
   .topbar {
+    position: relative;
     top: 0;
     grid-template-columns: 1fr;
     min-height: 0;
@@ -1276,6 +1350,7 @@ p {
   }
 
   .brand {
+    order: 1;
     justify-self: start;
   }
 
@@ -1285,6 +1360,7 @@ p {
   }
 
   .nav-tabs {
+    order: 3;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
@@ -1304,6 +1380,14 @@ p {
     grid-template-columns: 1fr;
     align-items: stretch;
     min-width: 0;
+  }
+
+  .account-controls {
+    order: 2;
+  }
+
+  .top-actions {
+    order: 4;
   }
 
   .post-open-button,
@@ -1331,7 +1415,13 @@ p {
   .login-panel,
   .hero-section {
     min-height: 0;
+    gap: 18px;
     padding: 24px 16px;
+  }
+
+  .login-content,
+  .hero-copy {
+    gap: 16px;
   }
 
   .login-panel h1,
@@ -1357,6 +1447,10 @@ p {
   .listing-area,
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .auth-button {
+    min-height: 50px;
   }
 
   .listing-tools {
@@ -1396,6 +1490,20 @@ p {
     min-width: 0;
   }
 
+  .market-stats {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    padding: 12px 14px;
+  }
+
+  .market-stats strong {
+    margin-top: 0;
+  }
+
+  .sort-control select {
+    min-height: 48px;
+  }
+
   .section-header h1 {
     font-size: 2.4rem;
   }
@@ -1411,11 +1519,21 @@ p {
   .product-meta,
   .seller-row {
     flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .value-strip div {
+    grid-template-columns: 46px 1fr;
+    min-height: 88px;
+    gap: 5px 14px;
+    padding: 16px;
     border-right: 0;
     border-bottom: 1px solid rgba(116, 129, 255, 0.18);
+  }
+
+  .value-icon {
+    width: 46px;
+    height: 46px;
   }
 
   .value-strip div:last-child {
@@ -1543,6 +1661,7 @@ p {
     width: 100%;
     max-height: calc(100dvh - 20px);
     padding: 16px;
+    border-radius: 8px 8px 0 0;
   }
 }
 
@@ -1563,6 +1682,12 @@ p {
 
   .nav-tab {
     font-size: 0.82rem;
+  }
+
+  .primary-button,
+  .ghost-button,
+  .card-button {
+    padding-inline: 12px;
   }
 
   .login-panel,
@@ -1611,5 +1736,65 @@ p {
   .market-avatar {
     width: 148px;
     height: 230px;
+  }
+}
+
+@media (max-width: 360px) {
+  .topbar {
+    gap: 9px;
+    padding: 9px;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+  }
+
+  .nav-tab {
+    min-height: 40px;
+    font-size: 0.78rem;
+  }
+
+  .login-panel h1,
+  .hero-section h1 {
+    font-size: 2.35rem;
+  }
+
+  .login-copy,
+  .hero-text,
+  .listing-board-title p {
+    font-size: 0.94rem;
+  }
+
+  .hero-visual,
+  .login-showcase {
+    min-height: 240px;
+  }
+
+  .showcase-avatar,
+  .market-avatar {
+    width: 132px;
+    height: 205px;
+  }
+
+  .showcase-crate,
+  .loot-chest {
+    width: 132px;
+    height: 74px;
+  }
+
+  .crystal-sword {
+    height: 175px;
+  }
+
+  .value-strip div {
+    grid-template-columns: 40px 1fr;
+    padding: 14px 12px;
+  }
+
+  .value-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 0.66rem;
   }
 }
