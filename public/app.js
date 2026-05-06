@@ -142,12 +142,13 @@ async function hydrateAuth() {
         : authMessage(authStatus);
 
     if (!state.user && !state.authMessage && !hasConfiguredProvider()) {
-      state.authMessage = "Add Discord or Google OAuth keys in .env, then restart the server.";
+      state.authMessage =
+        "Add Discord or Google OAuth keys in .env locally, or in Cloudflare Pages environment variables.";
     }
   } catch {
     state.authConfig = null;
     state.user = null;
-    state.authMessage = `Login server is not reachable at ${API_ORIGIN}. Run npm start.`;
+    state.authMessage = `Login server is not reachable at ${API_ORIGIN}. Run npm start locally or redeploy Cloudflare Pages with Functions.`;
   }
 
   clearAuthStatus();
@@ -190,7 +191,7 @@ function renderProviderButton(provider, button) {
   const configured = providerConfigured(provider);
   button.href = authStartUrl(provider);
   button.classList.toggle("needs-config", !configured);
-  button.title = configured ? "" : `${providerLabel(provider)} needs OAuth keys in .env.`;
+  button.title = configured ? "" : `${providerLabel(provider)} needs OAuth keys in your auth environment.`;
 }
 
 function renderAccount() {
@@ -326,8 +327,8 @@ function clearAuthStatus() {
 function authMessage(status) {
   const messages = {
     success: "You are signed in.",
-    discord_not_configured: "Discord login needs OAuth keys in .env.",
-    google_not_configured: "Google login needs OAuth keys in .env.",
+    discord_not_configured: "Discord login needs OAuth keys in the server environment.",
+    google_not_configured: "Google login needs OAuth keys in the server environment.",
     state_error: "Login expired. Try again.",
     token_error: "Login could not finish. Check the OAuth settings.",
     user_error: "Could not read your profile. Try again.",
