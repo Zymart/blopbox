@@ -962,6 +962,21 @@ p {
   width: 100%;
 }
 
+.product-grid.is-recommendation-rail {
+  display: flex;
+  grid-template-columns: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 8px;
+}
+
+.product-grid.is-recommendation-rail .product-card {
+  flex: 0 0 min(82vw, 290px);
+  scroll-snap-align: start;
+}
+
 .product-card {
   min-height: 310px;
   overflow: hidden;

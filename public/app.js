@@ -3,6 +3,7 @@ const PLACEHOLDER_IMAGE =
 const AUTH_SERVER_PORT = "3000";
 const API_ORIGIN = resolveApiOrigin();
 const MAX_PRODUCTS_PER_USER = 3;
+const HOME_RECOMMENDATION_LIMIT = 10;
 
 const state = {
   authConfig: null,
@@ -334,8 +335,10 @@ function renderProviderButton(provider, button) {
 
 function renderAccount() {
   const name = state.user.globalName || state.user.username || "Signed in";
+  const provider = state.user.provider || "account";
+  const ip = String(state.user.clientIp || "").trim();
   elements.userName.textContent = name;
-  elements.userProvider.textContent = state.user.provider || "account";
+  elements.userProvider.textContent = ip ? `${provider} • ${ip}` : provider;
   renderUserAvatar(name);
 }
 
@@ -881,6 +884,7 @@ function renderListings() {
   elements.listingCount.textContent = visible.length;
   if (elements.marketTitle) elements.marketTitle.textContent = viewTitle();
   if (elements.listingSubtitle) elements.listingSubtitle.textContent = viewSubtitle();
+  elements.productGrid.classList.toggle("is-recommendation-rail", state.mode === "market");
   renderPostLimit();
   elements.productGrid.innerHTML = "";
 
@@ -1007,7 +1011,8 @@ function filteredListings() {
   if (state.mode === "market") {
     return listings
       .filter((listing) => productRatingStats(listing).count > 0)
-      .sort(sortByRecommendation);
+      .sort(sortByRecommendation)
+      .slice(0, HOME_RECOMMENDATION_LIMIT);
   }
 
   return listings.sort((a, b) => {

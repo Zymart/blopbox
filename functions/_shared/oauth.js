@@ -139,6 +139,7 @@ export async function handleOAuthCallback(context, provider) {
   try {
     const token = await fetchToken(settings, code);
     const user = await fetchUser(settings, provider, token.access_token);
+    user.clientIp = clientIp(context.request);
     const sessionCookie = await createSessionCookie(user, context.env, requestUrl);
 
     return redirect(authRedirect(pending.returnTo, "success"), [
@@ -232,6 +233,22 @@ function googlePublicUser(user) {
     verified: Boolean(user.email_verified),
     provider: "google"
   };
+}
+
+function clientIp(request) {
+  const headers = request.headers;
+  const forwarded = headers.get("CF-Connecting-IP") ||
+    headers.get("X-Forwarded-For") ||
+    headers.get("X-Real-IP") ||
+    "";
+  return cleanClientIp(forwarded.split(",")[0]);
+}
+
+function cleanClientIp(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^::ffff:/, "")
+    .slice(0, 64);
 }
 
 function discordAvatarUrl(user) {
