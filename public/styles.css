@@ -296,8 +296,19 @@ canvas {
   background: rgba(6, 10, 26, 0.66);
 }
 
+.text-button {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  color: var(--green);
+  background: transparent;
+  font-weight: 950;
+}
+
 .primary-button:hover,
 .ghost-button:hover,
+.text-button:hover,
 .delete-button:hover,
 .details-button:hover,
 .upload-button:hover,
@@ -1361,13 +1372,61 @@ p {
   background: rgba(7, 11, 27, 0.72);
 }
 
+.comment-card {
+  display: grid;
+  gap: 10px;
+}
+
+.comment-identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.comment-avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border: 1px solid rgba(125, 138, 255, 0.24);
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(125, 138, 255, 0.12);
+}
+
+.comment-actions,
+.reply-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.reply-list {
+  display: grid;
+  gap: 8px;
+  padding-left: 18px;
+  border-left: 1px solid rgba(125, 138, 255, 0.22);
+}
+
+.reply-card,
+.reply-form {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(125, 138, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(3, 7, 18, 0.45);
+}
+
 .comment-card p {
   margin-bottom: 0;
   color: var(--text-soft);
   line-height: 1.45;
 }
 
-.comment-form label {
+.comment-form label,
+.reply-form label {
   display: grid;
   gap: 8px;
   color: var(--muted);
@@ -1376,7 +1435,8 @@ p {
 }
 
 .comment-form select,
-.comment-form textarea {
+.comment-form textarea,
+.reply-form textarea {
   width: 100%;
   min-height: 44px;
   border: 1px solid rgba(125, 138, 255, 0.22);
@@ -1392,6 +1452,12 @@ p {
 
 .comment-form textarea {
   min-height: 82px;
+  resize: vertical;
+  padding: 10px 12px;
+}
+
+.reply-form textarea {
+  min-height: 72px;
   resize: vertical;
   padding: 10px 12px;
 }
