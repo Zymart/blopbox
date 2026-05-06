@@ -82,8 +82,8 @@
         <section class="listing-area" id="listings" aria-label="Blopbox products">
           <div class="section-header">
             <div class="listing-board-title">
-              <h2>Posted Items</h2>
-              <p>All posts appear below as soon as you create them.</p>
+              <h2 id="marketTitle">Recommended</h2>
+              <p id="listingSubtitle">Highest-rated products appear on Home.</p>
             </div>
             <div class="listing-tools">
               <div class="market-stats">
@@ -269,16 +269,6 @@
               <h3 id="commentsTitle">Comments</h3>
               <div class="comments-list" id="commentsList"></div>
               <form class="comment-form" id="commentForm">
-                <label>
-                  Rating
-                  <select id="commentRating">
-                    <option value="5">5 - Excellent</option>
-                    <option value="4">4 - Good</option>
-                    <option value="3">3 - Okay</option>
-                    <option value="2">2 - Poor</option>
-                    <option value="1">1 - Bad</option>
-                  </select>
-                </label>
                 <label>
                   Comment
                   <textarea id="commentText" maxlength="220" placeholder="Share a short note about the seller or product"></textarea>

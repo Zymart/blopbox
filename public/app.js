@@ -13,6 +13,7 @@ const state = {
   listings: [],
   activeListingId: "",
   replyingToCommentId: "",
+  expandedReplyIds: new Set(),
   user: null
 };
 
@@ -24,7 +25,6 @@ const elements = {
   closePostButton: document.querySelector("#closePostButton"),
   commentForm: document.querySelector("#commentForm"),
   commentHint: document.querySelector("#commentHint"),
-  commentRating: document.querySelector("#commentRating"),
   commentText: document.querySelector("#commentText"),
   commentsList: document.querySelector("#commentsList"),
   detailsAge: document.querySelector("#detailsAge"),
@@ -46,6 +46,7 @@ const elements = {
   itemTitle: document.querySelector("#itemTitle"),
   loginGate: document.querySelector("#loginGate"),
   listingCount: document.querySelector("#listingCount"),
+  listingSubtitle: document.querySelector("#listingSubtitle"),
   listingForm: document.querySelector("#listingForm"),
   logoutButton: document.querySelector("#logoutButton"),
   marketTitle: document.querySelector("#marketTitle"),
@@ -72,6 +73,7 @@ async function init() {
   await hydrateAuth();
   if (state.user) await hydrateProducts();
   renderAuth();
+  activateMode(state.mode);
   renderListings();
 
   if (state.user && state.authMessage) toast(state.authMessage);
@@ -125,6 +127,14 @@ function bindControls() {
       state.replyingToCommentId = "";
       renderDetails();
     }
+
+    const repliesButton = event.target.closest("[data-toggle-replies]");
+    if (repliesButton) {
+      const commentId = repliesButton.dataset.toggleReplies || "";
+      if (state.expandedReplyIds.has(commentId)) state.expandedReplyIds.delete(commentId);
+      else state.expandedReplyIds.add(commentId);
+      renderDetails();
+    }
   });
 
   elements.commentsList.addEventListener("submit", async (event) => {
@@ -167,6 +177,10 @@ function activateMode(mode) {
   elements.navTabs.forEach((item) => {
     item.classList.toggle("active", (item.dataset.mode || "market") === mode);
   });
+  if (elements.sortSelect) {
+    const sortControl = elements.sortSelect.closest(".sort-control");
+    if (sortControl) sortControl.hidden = mode !== "drops";
+  }
 }
 
 async function hydrateAuth() {
@@ -514,6 +528,7 @@ function closeDetails() {
   elements.detailsOverlay.hidden = true;
   state.activeListingId = "";
   state.replyingToCommentId = "";
+  state.expandedReplyIds.clear();
   elements.commentForm.reset();
 }
 
@@ -582,25 +597,36 @@ function renderComments(comments) {
     const text = document.createElement("p");
     const actions = document.createElement("div");
     const replyButton = document.createElement("button");
+    const repliesButton = document.createElement("button");
     const replies = Array.isArray(comment.replies) ? comment.replies : [];
+    const expanded = state.expandedReplyIds.has(comment.id);
 
     card.className = "comment-card";
     header.className = "comment-header";
     identity.className = "comment-identity";
     author.textContent = comment.authorName || "User";
-    meta.textContent = `${stars(comment.rating)} ${timeAgo(Number(comment.createdAt) || Date.now())}`;
+    meta.textContent = comment.rating
+      ? `${stars(comment.rating)} ${timeAgo(Number(comment.createdAt) || Date.now())}`
+      : timeAgo(Number(comment.createdAt) || Date.now());
     text.textContent = comment.text || "";
     actions.className = "comment-actions";
     replyButton.type = "button";
     replyButton.className = "text-button";
     replyButton.dataset.replyTo = comment.id || "";
     replyButton.textContent = "Reply";
+    repliesButton.type = "button";
+    repliesButton.className = "text-button";
+    repliesButton.dataset.toggleReplies = comment.id || "";
+    repliesButton.textContent = expanded
+      ? `Hide replies (${replies.length})`
+      : `View replies (${replies.length})`;
 
     identity.append(authorAvatar, author);
     header.append(identity, meta);
+    if (replies.length > 0) actions.append(repliesButton);
     actions.append(replyButton);
     card.append(header, text, actions);
-    if (replies.length > 0) card.append(renderReplies(replies));
+    if (replies.length > 0 && expanded) card.append(renderReplies(replies));
     if (state.replyingToCommentId === comment.id) card.append(renderReplyForm(comment.id));
     elements.commentsList.append(card);
   }
@@ -687,16 +713,14 @@ async function addComment() {
   if (!listing) return;
 
   const text = elements.commentText.value.trim();
-  const rating = Number(elements.commentRating.value);
-  if (!text || !Number.isFinite(rating)) {
-    toast("Add a rating and comment first.");
+  if (!text) {
+    toast("Add a comment first.");
     return;
   }
 
   try {
     const saved = await sendJson("/api/products/comment", "POST", {
       productId: listing.id,
-      rating,
       text
     });
     if (saved && saved.product) replaceListing(saved.product);
@@ -856,15 +880,22 @@ function renderListings() {
   const visible = filteredListings();
   elements.listingCount.textContent = visible.length;
   if (elements.marketTitle) elements.marketTitle.textContent = viewTitle();
+  if (elements.listingSubtitle) elements.listingSubtitle.textContent = viewSubtitle();
   renderPostLimit();
   elements.productGrid.innerHTML = "";
 
   if (visible.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
+    const emptyTitle =
+      state.mode === "market" ? "No recommended products yet." : "No matching products.";
+    const emptyCopy =
+      state.mode === "market"
+        ? "Recommendations appear after products receive ratings."
+        : "Try another search or post the first product.";
     empty.innerHTML = `
-      <strong>No matching products.</strong>
-      <span>Try another search or post the first product.</span>
+      <strong>${emptyTitle}</strong>
+      <span>${emptyCopy}</span>
       <button class="primary-button" type="button">Post Product</button>
     `;
     empty.querySelector("button").addEventListener("click", openPostForm);
@@ -960,30 +991,43 @@ function validImageUrl(value) {
 }
 
 function filteredListings() {
-  return state.listings
+  const listings = state.listings
     .filter((listing) => {
       const tags = getListingTags(listing).join(" ");
       const haystack = `${listing.title} ${listing.seller} ${listing.details || ""} ${tags}`.toLowerCase();
       const matchesQuery = !state.query || haystack.includes(state.query);
       const matchesMode =
         state.mode === "market" ||
-        (state.mode === "drops" && listing.tag === "Post") ||
+        state.mode === "drops" ||
         state.mode === "sellers";
 
       return matchesMode && matchesQuery;
-    })
-    .sort((a, b) => {
-      if (state.mode === "sellers") return a.seller.localeCompare(b.seller);
-      if (state.sort === "priceLow") return a.price - b.price;
-      if (state.sort === "priceHigh") return b.price - a.price;
-      return b.createdAt - a.createdAt;
     });
+
+  if (state.mode === "market") {
+    return listings
+      .filter((listing) => productRatingStats(listing).count > 0)
+      .sort(sortByRecommendation);
+  }
+
+  return listings.sort((a, b) => {
+    if (state.mode === "sellers") return a.seller.localeCompare(b.seller);
+    if (state.sort === "priceLow") return a.price - b.price;
+    if (state.sort === "priceHigh") return b.price - a.price;
+    return b.createdAt - a.createdAt;
+  });
 }
 
 function viewTitle() {
-  if (state.mode === "drops") return "Drops";
+  if (state.mode === "drops") return "Browse";
   if (state.mode === "sellers") return "Sellers";
-  return "Market";
+  return "Recommended";
+}
+
+function viewSubtitle() {
+  if (state.mode === "drops") return "All products appear here. Use sort to scan the full market.";
+  if (state.mode === "sellers") return "Browse products grouped by seller name.";
+  return "Highest-rated products appear on Home.";
 }
 
 async function removeListing(listingId) {
@@ -1052,6 +1096,25 @@ function sellerRatingStats(listing) {
     count: ratings.length,
     average: ratings.length ? total / ratings.length : 0
   };
+}
+
+function productRatingStats(listing) {
+  const ratings = getListingComments(listing)
+    .map((comment) => Number(comment.rating))
+    .filter((rating) => Number.isFinite(rating) && rating > 0);
+  const total = ratings.reduce((sum, rating) => sum + rating, 0);
+  return {
+    count: ratings.length,
+    average: ratings.length ? total / ratings.length : 0
+  };
+}
+
+function sortByRecommendation(a, b) {
+  const aStats = productRatingStats(a);
+  const bStats = productRatingStats(b);
+  if (bStats.average !== aStats.average) return bStats.average - aStats.average;
+  if (bStats.count !== aStats.count) return bStats.count - aStats.count;
+  return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
 }
 
 function readListings() {

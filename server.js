@@ -378,7 +378,7 @@ function normalizeComments(comments) {
       const rating = normalizeRating(comment.rating);
       const authorId = cleanText(comment.authorId, 120);
       const authorName = cleanText(comment.authorName, 80);
-      if (!id || !text || !rating || !authorId || !authorName) return null;
+      if (!id || !text || !authorId || !authorName) return null;
 
       return {
         id,
@@ -431,7 +431,7 @@ function normalizeRating(value) {
 function sanitizeComment(input, user) {
   const text = cleanText(input && input.text, 220);
   const rating = normalizeRating(input && input.rating);
-  if (!text || !rating) return null;
+  if (!text) return null;
 
   return {
     id: `comment-${Date.now()}-${crypto.randomBytes(5).toString("hex")}`,
@@ -493,7 +493,7 @@ async function handleProductComment(req, res) {
     const comment = parentCommentId ? null : sanitizeComment(body, session.user);
     const reply = parentCommentId ? sanitizeReply(body, session.user) : null;
     if (!productId || (!comment && !reply)) {
-      return json(res, 400, { error: "Add a rating and comment first." });
+      return json(res, 400, { error: "Add a comment first." });
     }
 
     const products = await readProducts();
