@@ -304,6 +304,13 @@ canvas {
   filter: brightness(1.08);
 }
 
+.primary-button:disabled,
+.ghost-button:disabled {
+  cursor: not-allowed;
+  filter: none;
+  opacity: 0.55;
+}
+
 .post-open-button {
   justify-self: end;
   white-space: nowrap;

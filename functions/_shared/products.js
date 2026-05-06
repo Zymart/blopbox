@@ -2,6 +2,7 @@ import { readSession } from "./oauth.js";
 
 const STORAGE_KEY = "products";
 const MAX_PRODUCTS = 250;
+const MAX_PRODUCTS_PER_USER = 3;
 const MAX_IMAGE_LENGTH = 3_000_000;
 
 export async function handleProducts(context) {
@@ -27,6 +28,10 @@ export async function handleProducts(context) {
       }
 
       const { products } = await readProducts(context.env);
+      if (userProductCount(products, session.user, product.id) >= MAX_PRODUCTS_PER_USER) {
+        return json({ error: "You can only post up to 3 products." }, 403);
+      }
+
       const next = [product, ...products.filter((item) => item.id !== product.id)]
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, MAX_PRODUCTS);
@@ -157,6 +162,13 @@ function userKey(user) {
 
 function canManageProduct(product, user) {
   return !product.ownerId || product.ownerId === userKey(user);
+}
+
+function userProductCount(products, user, ignoredProductId = "") {
+  const ownerId = userKey(user);
+  return products.filter((product) => {
+    return product.ownerId === ownerId && product.id !== ignoredProductId;
+  }).length;
 }
 
 function randomId() {

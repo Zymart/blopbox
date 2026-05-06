@@ -31,6 +31,7 @@ const PUBLIC_DIR = path.join(__dirname, "public");
 const DATA_DIR = path.join(__dirname, "data");
 const PRODUCTS_FILE = path.join(DATA_DIR, "products.json");
 const MAX_PRODUCTS = 250;
+const MAX_PRODUCTS_PER_USER = 3;
 const MAX_IMAGE_LENGTH = 3_000_000;
 const sessions = new Map();
 const oauthStates = new Map();
@@ -363,6 +364,13 @@ function canManageProduct(product, user) {
   return !product.ownerId || product.ownerId === userKey(user);
 }
 
+function userProductCount(products, user, ignoredProductId = "") {
+  const ownerId = userKey(user);
+  return products.filter((product) => {
+    return product.ownerId === ownerId && product.id !== ignoredProductId;
+  }).length;
+}
+
 function readJsonBody(req, maxBytes = 4 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let body = "";
@@ -414,6 +422,10 @@ async function handleProducts(req, res, url) {
       }
 
       const products = await readProducts();
+      if (userProductCount(products, session.user, product.id) >= MAX_PRODUCTS_PER_USER) {
+        return json(res, 403, { error: "You can only post up to 3 products." });
+      }
+
       const next = [product, ...products.filter((item) => item.id !== product.id)]
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, MAX_PRODUCTS);

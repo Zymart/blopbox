@@ -2,6 +2,7 @@ const PLACEHOLDER_IMAGE =
   "https://images.unsplash.com/photo-1603481546579-65d935ba9cdd?auto=format&fit=crop&w=900&q=80";
 const AUTH_SERVER_PORT = "3000";
 const API_ORIGIN = resolveApiOrigin();
+const MAX_PRODUCTS_PER_USER = 3;
 
 const state = {
   authConfig: null,
@@ -435,6 +436,10 @@ async function logout() {
 
 function openPostForm() {
   if (!requireAuth()) return;
+  if (!canPostProduct()) {
+    toast("You can only post up to 3 products.");
+    return;
+  }
 
   if (!elements.itemSeller.value.trim() && state.user) {
     elements.itemSeller.value = state.user.globalName || state.user.username || "";
@@ -450,6 +455,10 @@ function closePostForm() {
 
 async function addListing() {
   if (!requireAuth()) return;
+  if (!canPostProduct()) {
+    toast("You can only post up to 3 products.");
+    return;
+  }
 
   const title = elements.itemTitle.value.trim();
   const seller = elements.itemSeller.value.trim();
@@ -561,6 +570,7 @@ function renderListings() {
   const visible = filteredListings();
   elements.listingCount.textContent = visible.length;
   if (elements.marketTitle) elements.marketTitle.textContent = viewTitle();
+  renderPostLimit();
   elements.productGrid.innerHTML = "";
 
   if (visible.length === 0) {
@@ -759,6 +769,27 @@ function canRemoveListing(listing) {
   if (!state.user) return false;
   if (!listing.ownerId) return true;
   return listing.ownerId === `${state.user.provider || "account"}:${state.user.id || state.user.email || state.user.username || "unknown"}`;
+}
+
+function userProductCount() {
+  if (!state.user) return 0;
+  return state.listings.filter((listing) => canRemoveListing(listing)).length;
+}
+
+function canPostProduct() {
+  return userProductCount() < MAX_PRODUCTS_PER_USER;
+}
+
+function renderPostLimit() {
+  if (!state.user) return;
+  const remaining = Math.max(0, MAX_PRODUCTS_PER_USER - userProductCount());
+  const disabled = remaining === 0;
+  elements.openPostButton.disabled = disabled;
+  elements.openPostButton.title = disabled
+    ? "You can only post up to 3 products."
+    : `${remaining} product post${remaining === 1 ? "" : "s"} left.`;
+  elements.sellHeroButton.disabled = disabled;
+  elements.sellHeroButton.title = elements.openPostButton.title;
 }
 
 function money(amount) {
