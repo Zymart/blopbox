@@ -28,6 +28,10 @@ const SESSION_SECRET = hasRealValue(SESSION_SECRET_INPUT)
   : crypto.randomBytes(32).toString("hex");
 
 const PUBLIC_DIR = path.join(__dirname, "public");
+const DATA_DIR = path.join(__dirname, "data");
+const PRODUCTS_FILE = path.join(DATA_DIR, "products.json");
+const MAX_PRODUCTS = 250;
+const MAX_IMAGE_LENGTH = 3_000_000;
 const sessions = new Map();
 const oauthStates = new Map();
 
@@ -128,7 +132,7 @@ function applyCors(req, res) {
 
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,Accept");
   res.setHeader("Vary", "Origin");
 }
@@ -256,6 +260,186 @@ function readSession(req) {
   }
 
   return { id: sessionId, ...session };
+}
+
+async function readProducts() {
+  try {
+    const saved = await fsp.readFile(PRODUCTS_FILE, "utf8");
+    const products = JSON.parse(saved);
+    return Array.isArray(products) ? products.map(normalizeStoredProduct).filter(Boolean) : [];
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+async function writeProducts(products) {
+  await fsp.mkdir(DATA_DIR, { recursive: true });
+  await fsp.writeFile(PRODUCTS_FILE, `${JSON.stringify(products, null, 2)}\n`);
+}
+
+function normalizeStoredProduct(product) {
+  if (!product || typeof product !== "object") return null;
+  const id = cleanId(product.id);
+  const title = cleanText(product.title, 60);
+  const seller = cleanText(product.seller, 32);
+  const price = Math.max(1, Math.min(9999, Math.round(Number(product.price) || 0)));
+  if (!id || !title || !seller || !price) return null;
+
+  return {
+    id,
+    title,
+    seller,
+    tags: normalizeProductTags(product.tags),
+    price,
+    details: cleanText(product.details, 140),
+    image: cleanImage(product.image),
+    tag: cleanText(product.tag, 24) || "Post",
+    createdAt: normalizeTimestamp(product.createdAt),
+    ownerId: cleanText(product.ownerId, 120),
+    ownerName: cleanText(product.ownerName, 80)
+  };
+}
+
+function sanitizeProduct(input, user) {
+  return normalizeStoredProduct({
+    ...input,
+    id: cleanId(input && input.id) || `product-${Date.now()}-${crypto.randomBytes(5).toString("hex")}`,
+    tag: "Post",
+    ownerId: userKey(user),
+    ownerName: user.globalName || user.username || "Seller"
+  });
+}
+
+function cleanId(value) {
+  const id = String(value || "").trim();
+  return /^[a-zA-Z0-9_-]{8,80}$/.test(id) ? id : "";
+}
+
+function cleanText(value, maxLength) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function normalizeProductTags(tags) {
+  const pieces = Array.isArray(tags) ? tags : String(tags || "").split(/[\s,]+/);
+  const normalized = pieces
+    .map((tag) => cleanText(tag, 24).toLowerCase())
+    .filter(Boolean)
+    .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`))
+    .map((tag) => tag.replace(/[^#a-z0-9_-]/g, ""))
+    .filter((tag) => tag.length > 1);
+
+  return [...new Set(normalized)].slice(0, 6);
+}
+
+function normalizeTimestamp(value) {
+  const timestamp = Number(value);
+  const now = Date.now();
+  if (!Number.isFinite(timestamp) || timestamp <= 0 || timestamp > now + 60_000) return now;
+  return timestamp;
+}
+
+function cleanImage(value) {
+  const image = String(value || "").trim();
+  if (image.length > MAX_IMAGE_LENGTH) return "";
+  if (
+    image.startsWith("data:image/") ||
+    image.startsWith("http://") ||
+    image.startsWith("https://")
+  ) {
+    return image;
+  }
+  return "";
+}
+
+function userKey(user) {
+  return `${user.provider || "account"}:${user.id || user.email || user.username || "unknown"}`;
+}
+
+function canManageProduct(product, user) {
+  return !product.ownerId || product.ownerId === userKey(user);
+}
+
+function readJsonBody(req, maxBytes = 4 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    let tooLarge = false;
+
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > maxBytes) tooLarge = true;
+    });
+
+    req.on("end", () => {
+      if (tooLarge) {
+        const error = new Error("Request body is too large.");
+        error.statusCode = 413;
+        reject(error);
+        return;
+      }
+
+      try {
+        resolve(body.trim() ? JSON.parse(body) : {});
+      } catch {
+        const error = new Error("Invalid JSON body.");
+        error.statusCode = 400;
+        reject(error);
+      }
+    });
+
+    req.on("error", reject);
+  });
+}
+
+async function handleProducts(req, res, url) {
+  if (req.method === "GET") {
+    const products = await readProducts();
+    return json(res, 200, { products, storageConfigured: true });
+  }
+
+  const session = readSession(req);
+  if (!session) {
+    return json(res, 401, { error: "Sign in first." });
+  }
+
+  if (req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const product = sanitizeProduct(body, session.user);
+      if (!product || product.tags.length === 0) {
+        return json(res, 400, { error: "Fill in the required product fields." });
+      }
+
+      const products = await readProducts();
+      const next = [product, ...products.filter((item) => item.id !== product.id)]
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, MAX_PRODUCTS);
+      await writeProducts(next);
+      return json(res, 201, { product });
+    } catch (error) {
+      return json(res, error.statusCode || 500, { error: error.message || "Could not save product." });
+    }
+  }
+
+  if (req.method === "DELETE") {
+    const productId = cleanId(url.searchParams.get("id"));
+    if (!productId) return json(res, 400, { error: "Product id is required." });
+
+    const products = await readProducts();
+    const product = products.find((item) => item.id === productId);
+    if (!product) return json(res, 404, { error: "Product was not found." });
+    if (!canManageProduct(product, session.user)) {
+      return json(res, 403, { error: "You can only remove your own products." });
+    }
+
+    await writeProducts(products.filter((item) => item.id !== productId));
+    return json(res, 200, { ok: true });
+  }
+
+  return json(res, 405, { error: "Method not allowed" });
 }
 
 function avatarUrl(user) {
@@ -554,6 +738,10 @@ async function router(req, res) {
       scopes: DISCORD_SCOPES,
       redirectUri: DISCORD_REDIRECT_URI
     });
+  }
+
+  if (url.pathname === "/api/products") {
+    return handleProducts(req, res, url);
   }
 
   if (req.method === "GET" && url.pathname === "/auth/discord") {

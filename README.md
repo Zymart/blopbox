@@ -28,7 +28,7 @@ http://localhost:3000/auth/google/callback
 
 ## Notes
 
-Player posts, hashtags, and uploaded images are saved in browser local storage for now, so they are local to the device/browser.
+Products are saved through `/api/products`. Local development writes them to `data/products.json`, and Cloudflare Pages writes them to a KV namespace.
 
 ## Cloudflare Pages
 
@@ -54,3 +54,12 @@ FRONTEND_ORIGINS=https://your-pages-domain.pages.dev
 ```
 
 Also add the exact same callback URLs in the Discord Developer Portal and Google Cloud OAuth redirect settings.
+
+For products to show on every device, create a Cloudflare KV namespace and bind it to Pages:
+
+```text
+Binding name: PRODUCTS_KV
+Type: KV namespace
+```
+
+Without that binding, products can still save in one browser only and will not appear on your phone.

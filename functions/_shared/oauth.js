@@ -254,7 +254,7 @@ async function createSessionCookie(user, env, requestUrl) {
   });
 }
 
-async function readSession(request, env) {
+export async function readSession(request, env) {
   const cookies = parseCookies(request);
   const payload = cookies[SESSION_COOKIE]
     ? await unpackPayload(cookies[SESSION_COOKIE], env)

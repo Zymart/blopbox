@@ -9,7 +9,7 @@ const state = {
   mode: "market",
   query: "",
   sort: "newest",
-  listings: readListings(),
+  listings: [],
   user: null
 };
 
@@ -51,6 +51,7 @@ init();
 async function init() {
   bindControls();
   await hydrateAuth();
+  if (state.user) await hydrateProducts();
   renderAuth();
   renderListings();
 
@@ -147,17 +148,95 @@ async function hydrateAuth() {
   clearAuthStatus();
 }
 
-async function fetchJson(path) {
+async function fetchJson(path, options = {}) {
+  const headers = {
+    Accept: "application/json",
+    ...(options.headers || {})
+  };
+
   const response = await fetch(apiUrl(path), {
+    ...options,
     credentials: "include",
-    headers: { Accept: "application/json" }
+    headers
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed with ${response.status}`);
+    let message = `Request failed with ${response.status}`;
+    try {
+      const error = await response.json();
+      if (error && error.error) message = error.error;
+    } catch {
+      // Keep the status message if the server did not send JSON.
+    }
+    throw new Error(message);
   }
 
   return response.json();
+}
+
+function sendJson(path, method, body) {
+  return fetchJson(path, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+}
+
+async function hydrateProducts() {
+  const localProducts = readListings();
+
+  try {
+    const data = await fetchJson("/api/products");
+    let products = Array.isArray(data.products) ? data.products : [];
+
+    if (data.storageConfigured === false) {
+      state.listings = mergeListings(products, localProducts);
+      toast("Product storage is not connected yet, so products will stay on one device.");
+      return;
+    }
+
+    if (localProducts.length > 0) {
+      products = await migrateLocalProducts(localProducts, products);
+    }
+
+    state.listings = mergeListings(products);
+  } catch (error) {
+    state.listings = localProducts;
+    if (localProducts.length > 0) {
+      toast("Products are saved only on this device until the server can save them.");
+    }
+    console.warn(error);
+  }
+}
+
+async function migrateLocalProducts(localProducts, serverProducts) {
+  const serverIds = new Set(serverProducts.map((product) => product.id));
+  let next = serverProducts;
+  let movedAny = false;
+  let failedAny = false;
+
+  for (const product of localProducts) {
+    if (!product || serverIds.has(product.id)) continue;
+
+    try {
+      const saved = await sendJson("/api/products", "POST", product);
+      if (saved && saved.product) {
+        next = mergeListings([saved.product], next);
+        serverIds.add(saved.product.id);
+        movedAny = true;
+      }
+    } catch (error) {
+      failedAny = true;
+      console.warn(error);
+    }
+  }
+
+  if (movedAny && !failedAny) {
+    clearListings();
+    toast("Your saved products are now shared across devices.");
+  }
+
+  return failedAny ? mergeListings(next, localProducts) : next;
 }
 
 function renderAuth() {
@@ -392,7 +471,7 @@ async function addListing() {
   }
 
   const listing = {
-    id: `listing-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    id: `product-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     title,
     seller,
     tags,
@@ -403,21 +482,34 @@ async function addListing() {
     createdAt: Date.now()
   };
 
-  state.listings = [listing, ...state.listings];
+  let postMessage = "Product posted to Blopbox.";
 
   try {
-    writeListings(state.listings);
-  } catch {
-    state.listings = state.listings.filter((item) => item.id !== listing.id);
-    toast("That image is too large for local storage. Try a smaller image.");
-    return;
+    const saved = await sendJson("/api/products", "POST", listing);
+    const product = saved.product || listing;
+    state.listings = mergeListings([product], state.listings);
+    clearListings();
+  } catch (error) {
+    state.listings = [listing, ...state.listings];
+
+    try {
+      writeListings(state.listings);
+    } catch {
+      state.listings = state.listings.filter((item) => item.id !== listing.id);
+      toast("That image is too large to save. Try a smaller image.");
+      return;
+    }
+
+    postMessage = error.message
+      ? `${error.message} Product saved on this device only.`
+      : "Product saved on this device only. Server storage is not ready.";
   }
 
   elements.listingForm.reset();
   elements.uploadFileName.textContent = "Choose from phone gallery, camera roll, or laptop files.";
   closePostForm();
   renderListings();
-  toast("Product posted to Blopbox.");
+  toast(postMessage);
 }
 
 async function resolveListingImage() {
@@ -440,7 +532,7 @@ function imageFileToDataUrl(file) {
     const image = new Image();
 
     image.onload = () => {
-      const maxSide = 1100;
+      const maxSide = 900;
       const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
       const width = Math.max(1, Math.round(image.width * scale));
       const height = Math.max(1, Math.round(image.height * scale));
@@ -453,7 +545,7 @@ function imageFileToDataUrl(file) {
       context.fillRect(0, 0, width, height);
       context.drawImage(image, 0, 0, width, height);
       URL.revokeObjectURL(objectUrl);
-      resolve(canvas.toDataURL("image/jpeg", 0.82));
+      resolve(canvas.toDataURL("image/jpeg", 0.74));
     };
 
     image.onerror = () => {
@@ -486,7 +578,8 @@ function renderListings() {
 
   for (const listing of visible) {
     const card = listingCard(listing);
-    card.querySelector(".delete-button").addEventListener("click", () => removeListing(listing.id));
+    const removeButton = card.querySelector(".delete-button");
+    if (removeButton) removeButton.addEventListener("click", () => removeListing(listing.id));
     elements.productGrid.append(card);
   }
 }
@@ -542,7 +635,8 @@ function listingCard(listing) {
   titleRow.append(title, price);
   meta.append(tags, age);
   sellerRow.append(sellerLabel, seller);
-  body.append(titleRow, meta, details, sellerRow, remove);
+  body.append(titleRow, meta, details, sellerRow);
+  if (canRemoveListing(listing)) body.append(remove);
   card.append(media, body);
   return card;
 }
@@ -586,13 +680,22 @@ function viewTitle() {
   return "Market";
 }
 
-function removeListing(listingId) {
+async function removeListing(listingId) {
   if (!requireAuth()) return;
 
+  const previous = state.listings;
   state.listings = state.listings.filter((listing) => listing.id !== listingId);
-  writeListings(state.listings);
   renderListings();
-  toast("Product removed.");
+
+  try {
+    await fetchJson(`/api/products?id=${encodeURIComponent(listingId)}`, { method: "DELETE" });
+    removeLocalListing(listingId);
+    toast("Product removed.");
+  } catch (error) {
+    state.listings = previous;
+    renderListings();
+    toast(error.message || "Could not remove product.");
+  }
 }
 
 function normalizeTags(value) {
@@ -624,6 +727,38 @@ function readListings() {
 
 function writeListings(listings) {
   localStorage.setItem("blopbox_listings", JSON.stringify(listings));
+}
+
+function clearListings() {
+  localStorage.removeItem("blopbox_listings");
+}
+
+function removeLocalListing(listingId) {
+  const localProducts = readListings().filter((listing) => listing.id !== listingId);
+  if (localProducts.length > 0) writeListings(localProducts);
+  else clearListings();
+}
+
+function mergeListings(...groups) {
+  const products = new Map();
+
+  for (const group of groups) {
+    if (!Array.isArray(group)) continue;
+    for (const product of group) {
+      if (!product || !product.id) continue;
+      products.set(product.id, product);
+    }
+  }
+
+  return [...products.values()].sort((a, b) => {
+    return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
+  });
+}
+
+function canRemoveListing(listing) {
+  if (!state.user) return false;
+  if (!listing.ownerId) return true;
+  return listing.ownerId === `${state.user.provider || "account"}:${state.user.id || state.user.email || state.user.username || "unknown"}`;
 }
 
 function money(amount) {
