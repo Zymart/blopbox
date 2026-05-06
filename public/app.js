@@ -91,13 +91,6 @@ function bindControls() {
     elements.itemImageFile.click();
   });
 
-  elements.uploadButton.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      elements.itemImageFile.click();
-    }
-  });
-
   elements.sortSelect.addEventListener("change", (event) => {
     state.sort = event.target.value;
     renderListings();
@@ -386,7 +379,7 @@ async function addListing() {
   const details = elements.itemDetails.value.trim();
 
   if (!title || !seller || tags.length === 0 || !Number.isFinite(price) || price <= 0) {
-    toast("Fill in the required listing fields.");
+    toast("Fill in the required product fields.");
     return;
   }
 
@@ -424,7 +417,7 @@ async function addListing() {
   elements.uploadFileName.textContent = "Choose from phone gallery, camera roll, or laptop files.";
   closePostForm();
   renderListings();
-  toast("Listing posted to Blopbox.");
+  toast("Product posted to Blopbox.");
 }
 
 async function resolveListingImage() {
@@ -482,9 +475,9 @@ function renderListings() {
     const empty = document.createElement("div");
     empty.className = "empty-state";
     empty.innerHTML = `
-      <strong>No matching listings.</strong>
-      <span>Try another search or post the first item.</span>
-      <button class="primary-button" type="button">Post Listing</button>
+      <strong>No matching products.</strong>
+      <span>Try another search or post the first product.</span>
+      <button class="primary-button" type="button">Post Product</button>
     `;
     empty.querySelector("button").addEventListener("click", openPostForm);
     elements.productGrid.append(empty);
@@ -527,22 +520,22 @@ function listingCard(listing) {
   remove.className = "delete-button full-width";
 
   image.src = validImageUrl(listing.image);
-  image.alt = listing.title || "Posted item";
+  image.alt = listing.title || "Posted product";
   image.loading = "lazy";
   image.onerror = () => {
     image.onerror = null;
     image.src = PLACEHOLDER_IMAGE;
   };
   tag.textContent = listing.tag || "Post";
-  title.textContent = listing.title || "Untitled listing";
+  title.textContent = listing.title || "Untitled product";
   price.textContent = money(Number(listing.price) || 0);
   tags.textContent = getListingTags(listing).join(" ");
   age.textContent = timeAgo(Number(listing.createdAt) || Date.now());
-  details.textContent = listing.details || "Posted listing.";
+  details.textContent = listing.details || "Posted product.";
   sellerLabel.textContent = "Seller";
   seller.textContent = listing.seller || "Player";
   remove.type = "button";
-  remove.setAttribute("aria-label", "Remove listing");
+  remove.setAttribute("aria-label", "Remove product");
   remove.textContent = "Remove";
 
   media.append(image, tag);
@@ -599,7 +592,7 @@ function removeListing(listingId) {
   state.listings = state.listings.filter((listing) => listing.id !== listingId);
   writeListings(state.listings);
   renderListings();
-  toast("Listing removed.");
+  toast("Product removed.");
 }
 
 function normalizeTags(value) {

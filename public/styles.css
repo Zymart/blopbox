@@ -1116,7 +1116,8 @@ p {
 }
 
 .listing-form,
-.listing-form label {
+.listing-form label,
+.upload-field {
   display: grid;
   gap: 8px;
 }
@@ -1125,7 +1126,8 @@ p {
   gap: 12px;
 }
 
-.listing-form label {
+.listing-form label,
+.field-label {
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 900;

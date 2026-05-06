@@ -71,15 +71,15 @@
 
         <div class="top-actions">
           <label class="search-control" for="searchInput">
-            <span class="visually-hidden">Search listings</span>
+            <span class="visually-hidden">Search products</span>
             <input id="searchInput" type="search" placeholder="Search items...">
           </label>
-          <button class="primary-button post-open-button" id="openPostButton" type="button">Post Listing</button>
+          <button class="primary-button post-open-button" id="openPostButton" type="button">Post Product</button>
         </div>
       </header>
 
       <main class="market-layout">
-        <section class="listing-area" id="listings" aria-label="Blopbox listings">
+        <section class="listing-area" id="listings" aria-label="Blopbox products">
           <div class="section-header">
             <div class="listing-board-title">
               <h2>Posted Items</h2>
@@ -87,7 +87,7 @@
             </div>
             <div class="listing-tools">
               <div class="market-stats">
-                <span>Listings</span>
+                <span>Products</span>
                 <strong id="listingCount">0</strong>
               </div>
               <label class="sort-control" for="sortSelect">
@@ -182,11 +182,11 @@
     </div>
 
     <div class="post-overlay" id="postOverlay" hidden>
-      <aside class="post-panel" id="postListing" aria-label="Post a listing">
+      <aside class="post-panel" id="postListing" aria-label="Post a product">
         <div class="modal-header">
           <div>
             <span class="panel-kicker">Post</span>
-            <h2>Create a Listing</h2>
+            <h2>Create a Product</h2>
           </div>
           <button class="icon-button" id="closePostButton" type="button" aria-label="Close post form">x</button>
         </div>
@@ -214,19 +214,19 @@
             </label>
           </div>
 
-          <label>
-            Upload image
+          <div class="upload-field">
+            <span class="field-label">Upload image</span>
             <input class="file-input" id="itemImageFile" type="file" accept="image/*">
-            <span class="upload-button" id="uploadButton" tabindex="0">Choose Image</span>
+            <button class="upload-button" id="uploadButton" type="button">Choose Image</button>
             <span class="field-hint" id="uploadFileName">Choose from phone gallery, camera roll, or laptop files.</span>
-          </label>
+          </div>
 
           <label>
             Details
             <textarea id="itemDetails" maxlength="140" placeholder="Short note about the item"></textarea>
           </label>
 
-          <button class="primary-button" type="submit">Post to Market</button>
+          <button class="primary-button" type="submit">Post Product</button>
         </form>
       </aside>
     </div>

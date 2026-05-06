@@ -1,6 +1,6 @@
 # Blopbox
 
-A dark blue and purple gaming marketplace where players can post hashtagged listings for skins, items, accounts, boosts, passes, collectibles, and other game services.
+A dark blue and purple gaming marketplace where players can post hashtagged products for skins, items, accounts, boosts, passes, collectibles, and other game services.
 
 ## Run
 
