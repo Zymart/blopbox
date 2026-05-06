@@ -386,12 +386,40 @@ function normalizeComments(comments) {
         rating,
         authorId,
         authorName,
-        createdAt: normalizeTimestamp(comment.createdAt)
+        authorAvatar: cleanImage(comment.authorAvatar),
+        createdAt: normalizeTimestamp(comment.createdAt),
+        replies: normalizeReplies(comment.replies)
       };
     })
     .filter(Boolean)
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, MAX_COMMENTS_PER_PRODUCT);
+}
+
+function normalizeReplies(replies) {
+  if (!Array.isArray(replies)) return [];
+
+  return replies
+    .map((reply) => {
+      if (!reply || typeof reply !== "object") return null;
+      const id = cleanId(reply.id);
+      const text = cleanText(reply.text, 220);
+      const authorId = cleanText(reply.authorId, 120);
+      const authorName = cleanText(reply.authorName, 80);
+      if (!id || !text || !authorId || !authorName) return null;
+
+      return {
+        id,
+        text,
+        authorId,
+        authorName,
+        authorAvatar: cleanImage(reply.authorAvatar),
+        createdAt: normalizeTimestamp(reply.createdAt)
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .slice(0, 40);
 }
 
 function normalizeRating(value) {
@@ -411,8 +439,38 @@ function sanitizeComment(input, user) {
     rating,
     authorId: userKey(user),
     authorName: user.globalName || user.username || "User",
+    authorAvatar: cleanImage(user.avatar),
+    replies: [],
     createdAt: Date.now()
   };
+}
+
+function sanitizeReply(input, user) {
+  const text = cleanText(input && input.text, 220);
+  if (!text) return null;
+
+  return {
+    id: `reply-${Date.now()}-${crypto.randomBytes(5).toString("hex")}`,
+    text,
+    authorId: userKey(user),
+    authorName: user.globalName || user.username || "User",
+    authorAvatar: cleanImage(user.avatar),
+    createdAt: Date.now()
+  };
+}
+
+function addReplyToComments(comments, parentCommentId, reply) {
+  let found = false;
+  const next = comments.map((comment) => {
+    if (comment.id !== parentCommentId) return comment;
+    found = true;
+    return {
+      ...comment,
+      replies: [...(comment.replies || []), reply].slice(-40)
+    };
+  });
+
+  return found ? next : null;
 }
 
 function userProductCount(products, user, ignoredProductId = "") {
@@ -431,21 +489,26 @@ async function handleProductComment(req, res) {
   try {
     const body = await readJsonBody(req);
     const productId = cleanId(body.productId);
-    const comment = sanitizeComment(body, session.user);
-    if (!productId || !comment) {
+    const parentCommentId = cleanId(body.parentCommentId);
+    const comment = parentCommentId ? null : sanitizeComment(body, session.user);
+    const reply = parentCommentId ? sanitizeReply(body, session.user) : null;
+    if (!productId || (!comment && !reply)) {
       return json(res, 400, { error: "Add a rating and comment first." });
     }
 
     const products = await readProducts();
     const index = products.findIndex((product) => product.id === productId);
     if (index === -1) return json(res, 404, { error: "Product was not found." });
-    if (canManageProduct(products[index], session.user)) {
-      return json(res, 403, { error: "You cannot rate your own product." });
-    }
+
+    const comments = products[index].comments || [];
+    const nextComments = parentCommentId
+      ? addReplyToComments(comments, parentCommentId, reply)
+      : [comment, ...comments].slice(0, MAX_COMMENTS_PER_PRODUCT);
+    if (!nextComments) return json(res, 404, { error: "Comment was not found." });
 
     const product = {
       ...products[index],
-      comments: [comment, ...(products[index].comments || [])].slice(0, MAX_COMMENTS_PER_PRODUCT)
+      comments: nextComments
     };
     const next = products.slice();
     next[index] = product;

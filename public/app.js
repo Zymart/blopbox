@@ -12,6 +12,7 @@ const state = {
   sort: "newest",
   listings: [],
   activeListingId: "",
+  replyingToCommentId: "",
   user: null
 };
 
@@ -108,6 +109,28 @@ function bindControls() {
   elements.commentForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     await addComment();
+  });
+
+  elements.commentsList.addEventListener("click", (event) => {
+    const replyButton = event.target.closest("[data-reply-to]");
+    if (replyButton) {
+      state.replyingToCommentId = replyButton.dataset.replyTo || "";
+      renderDetails();
+      const replyText = elements.commentsList.querySelector(".reply-form textarea");
+      if (replyText) replyText.focus();
+      return;
+    }
+
+    if (event.target.closest("[data-cancel-reply]")) {
+      state.replyingToCommentId = "";
+      renderDetails();
+    }
+  });
+
+  elements.commentsList.addEventListener("submit", async (event) => {
+    if (!event.target.classList.contains("reply-form")) return;
+    event.preventDefault();
+    await addReply(event.target.dataset.commentId || "", event.target.elements.replyText.value);
   });
 
   elements.itemImageFile.addEventListener("change", () => {
@@ -490,6 +513,7 @@ function openDetails(listingId) {
 function closeDetails() {
   elements.detailsOverlay.hidden = true;
   state.activeListingId = "";
+  state.replyingToCommentId = "";
   elements.commentForm.reset();
 }
 
@@ -533,10 +557,8 @@ function renderDetails() {
   }
 
   renderComments(comments);
-  elements.commentForm.hidden = isOwner;
-  elements.commentHint.textContent = isOwner
-    ? "You own this product, so only other clients can leave ratings and comments."
-    : "";
+  elements.commentForm.hidden = false;
+  elements.commentHint.textContent = isOwner ? "You own this product. You can still comment and reply." : "";
 }
 
 function renderComments(comments) {
@@ -553,30 +575,116 @@ function renderComments(comments) {
   for (const comment of comments) {
     const card = document.createElement("article");
     const header = document.createElement("div");
+    const identity = document.createElement("div");
+    const authorAvatar = createCommentAvatar(comment.authorName, comment.authorAvatar);
+    const author = document.createElement("strong");
+    const meta = document.createElement("span");
+    const text = document.createElement("p");
+    const actions = document.createElement("div");
+    const replyButton = document.createElement("button");
+    const replies = Array.isArray(comment.replies) ? comment.replies : [];
+
+    card.className = "comment-card";
+    header.className = "comment-header";
+    identity.className = "comment-identity";
+    author.textContent = comment.authorName || "User";
+    meta.textContent = `${stars(comment.rating)} ${timeAgo(Number(comment.createdAt) || Date.now())}`;
+    text.textContent = comment.text || "";
+    actions.className = "comment-actions";
+    replyButton.type = "button";
+    replyButton.className = "text-button";
+    replyButton.dataset.replyTo = comment.id || "";
+    replyButton.textContent = "Reply";
+
+    identity.append(authorAvatar, author);
+    header.append(identity, meta);
+    actions.append(replyButton);
+    card.append(header, text, actions);
+    if (replies.length > 0) card.append(renderReplies(replies));
+    if (state.replyingToCommentId === comment.id) card.append(renderReplyForm(comment.id));
+    elements.commentsList.append(card);
+  }
+}
+
+function renderReplies(replies) {
+  const list = document.createElement("div");
+  list.className = "reply-list";
+
+  for (const reply of replies) {
+    const item = document.createElement("article");
+    const header = document.createElement("div");
+    const identity = document.createElement("div");
+    const authorAvatar = createCommentAvatar(reply.authorName, reply.authorAvatar);
     const author = document.createElement("strong");
     const meta = document.createElement("span");
     const text = document.createElement("p");
 
-    card.className = "comment-card";
+    item.className = "reply-card";
     header.className = "comment-header";
-    author.textContent = comment.authorName || "User";
-    meta.textContent = `${stars(comment.rating)} ${timeAgo(Number(comment.createdAt) || Date.now())}`;
-    text.textContent = comment.text || "";
+    identity.className = "comment-identity";
+    author.textContent = reply.authorName || "User";
+    meta.textContent = timeAgo(Number(reply.createdAt) || Date.now());
+    text.textContent = reply.text || "";
 
-    header.append(author, meta);
-    card.append(header, text);
-    elements.commentsList.append(card);
+    identity.append(authorAvatar, author);
+    header.append(identity, meta);
+    item.append(header, text);
+    list.append(item);
   }
+
+  return list;
+}
+
+function renderReplyForm(commentId) {
+  const form = document.createElement("form");
+  const label = document.createElement("label");
+  const textarea = document.createElement("textarea");
+  const controls = document.createElement("div");
+  const cancelButton = document.createElement("button");
+  const submitButton = document.createElement("button");
+
+  form.className = "reply-form";
+  form.dataset.commentId = commentId;
+  label.textContent = "Reply";
+  textarea.name = "replyText";
+  textarea.maxLength = 220;
+  textarea.placeholder = "Write a short reply";
+  controls.className = "reply-controls";
+  cancelButton.type = "button";
+  cancelButton.className = "ghost-button";
+  cancelButton.dataset.cancelReply = "true";
+  cancelButton.textContent = "Cancel";
+  submitButton.type = "submit";
+  submitButton.className = "primary-button";
+  submitButton.textContent = "Post Reply";
+
+  label.append(textarea);
+  controls.append(cancelButton, submitButton);
+  form.append(label, controls);
+  return form;
+}
+
+function createCommentAvatar(name, avatar) {
+  const image = document.createElement("img");
+  const label = name || "User";
+  const fallback = initialAvatar(label, "comment");
+  const source = String(avatar || "").trim();
+
+  image.className = "comment-avatar";
+  image.alt = `${label} profile picture`;
+  image.referrerPolicy = "no-referrer";
+  image.onerror = () => {
+    image.onerror = null;
+    image.src = fallback;
+  };
+  image.src = source || fallback;
+  return image;
 }
 
 async function addComment() {
   if (!requireAuth()) return;
   const listing = activeListing();
   if (!listing) return;
-  if (canRemoveListing(listing)) {
-    toast("You cannot rate your own product.");
-    return;
-  }
 
   const text = elements.commentText.value.trim();
   const rating = Number(elements.commentRating.value);
@@ -598,6 +706,33 @@ async function addComment() {
     toast("Comment posted.");
   } catch (error) {
     toast(error.message || "Could not post comment.");
+  }
+}
+
+async function addReply(commentId, textValue) {
+  if (!requireAuth()) return;
+  const listing = activeListing();
+  if (!listing || !commentId) return;
+
+  const text = String(textValue || "").trim();
+  if (!text) {
+    toast("Write a reply first.");
+    return;
+  }
+
+  try {
+    const saved = await sendJson("/api/products/comment", "POST", {
+      productId: listing.id,
+      parentCommentId: commentId,
+      text
+    });
+    if (saved && saved.product) replaceListing(saved.product);
+    state.replyingToCommentId = "";
+    renderListings();
+    renderDetails();
+    toast("Reply posted.");
+  } catch (error) {
+    toast(error.message || "Could not post reply.");
   }
 }
 
