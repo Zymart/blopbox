@@ -139,7 +139,7 @@ export async function handleOAuthCallback(context, provider) {
   try {
     const token = await fetchToken(settings, code);
     const user = await fetchUser(settings, provider, token.access_token);
-    user.clientIp = clientIp(context.request);
+    user.countryCode = clientCountry(context.request);
     const sessionCookie = await createSessionCookie(user, context.env, requestUrl);
 
     return redirect(authRedirect(pending.returnTo, "success"), [
@@ -235,20 +235,24 @@ function googlePublicUser(user) {
   };
 }
 
-function clientIp(request) {
+function clientCountry(request) {
   const headers = request.headers;
-  const forwarded = headers.get("CF-Connecting-IP") ||
-    headers.get("X-Forwarded-For") ||
-    headers.get("X-Real-IP") ||
-    "";
-  return cleanClientIp(forwarded.split(",")[0]);
+  return cleanCountryCode(
+    request.cf?.country ||
+      headers.get("CF-IPCountry") ||
+      headers.get("X-Vercel-IP-Country") ||
+      headers.get("X-Country-Code") ||
+      headers.get("CloudFront-Viewer-Country") ||
+      ""
+  );
 }
 
-function cleanClientIp(value) {
+function cleanCountryCode(value) {
   return String(value || "")
     .trim()
-    .replace(/^::ffff:/, "")
-    .slice(0, 64);
+    .toUpperCase()
+    .replace(/[^A-Z]/g, "")
+    .slice(0, 2);
 }
 
 function discordAvatarUrl(user) {

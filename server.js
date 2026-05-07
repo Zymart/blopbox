@@ -249,21 +249,22 @@ function createSession(user) {
   return id;
 }
 
-function clientIp(req) {
-  const forwarded =
-    req.headers["cf-connecting-ip"] ||
-    req.headers["x-forwarded-for"] ||
-    req.headers["x-real-ip"] ||
-    req.socket.remoteAddress ||
-    "";
-  return cleanClientIp(String(forwarded).split(",")[0]);
+function clientCountry(req) {
+  return cleanCountryCode(
+    req.headers["cf-ipcountry"] ||
+      req.headers["x-vercel-ip-country"] ||
+      req.headers["x-country-code"] ||
+      req.headers["cloudfront-viewer-country"] ||
+      ""
+  );
 }
 
-function cleanClientIp(value) {
+function cleanCountryCode(value) {
   return String(value || "")
     .trim()
-    .replace(/^::ffff:/, "")
-    .slice(0, 64);
+    .toUpperCase()
+    .replace(/[^A-Z]/g, "")
+    .slice(0, 2);
 }
 
 function readSession(req) {
@@ -739,7 +740,7 @@ async function handleDiscordCallback(req, res, url) {
     }
 
     const user = publicUser(await userResponse.json());
-    user.clientIp = clientIp(req);
+    user.countryCode = clientCountry(req);
     const sessionId = createSession(user);
     setCookie(res, "market_session", packSigned(sessionId), {
       maxAge: 60 * 60 * 24 * 7,
@@ -833,7 +834,7 @@ async function handleGoogleCallback(req, res, url) {
     }
 
     const user = googlePublicUser(await userResponse.json());
-    user.clientIp = clientIp(req);
+    user.countryCode = clientCountry(req);
     const sessionId = createSession(user);
     setCookie(res, "market_session", packSigned(sessionId), {
       maxAge: 60 * 60 * 24 * 7,

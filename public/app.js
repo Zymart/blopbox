@@ -336,10 +336,21 @@ function renderProviderButton(provider, button) {
 function renderAccount() {
   const name = state.user.globalName || state.user.username || "Signed in";
   const provider = state.user.provider || "account";
-  const ip = String(state.user.clientIp || "").trim();
+  const countryFlag = countryFlagEmoji(state.user.countryCode);
   elements.userName.textContent = name;
-  elements.userProvider.textContent = ip ? `${provider} • ${ip}` : provider;
+  elements.userProvider.textContent = countryFlag ? `${provider} ${countryFlag}` : provider;
+  elements.userProvider.title = countryFlag ? `${provider} account` : "";
   renderUserAvatar(name);
+}
+
+function countryFlagEmoji(countryCode) {
+  const code = String(countryCode || "").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return "";
+
+  const regionalIndicatorOffset = 0x1f1e6 - 65;
+  return Array.from(code)
+    .map((letter) => String.fromCodePoint(letter.charCodeAt(0) + regionalIndicatorOffset))
+    .join("");
 }
 
 function renderUserAvatar(name) {
