@@ -379,10 +379,22 @@ canvas {
 }
 
 .user-chip small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 900;
   text-transform: capitalize;
+}
+
+.user-chip .country-flag {
+  grid-row: auto;
+  width: 24px;
+  height: 18px;
+  border-radius: 2px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22);
 }
 
 .logout-button {

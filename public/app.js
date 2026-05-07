@@ -336,10 +336,12 @@ function renderProviderButton(provider, button) {
 function renderAccount() {
   const name = state.user.globalName || state.user.username || "Signed in";
   const provider = state.user.provider || "account";
-  const countryFlag = countryFlagEmoji(state.user.countryCode || browserCountryCode());
+  const countryCode = cleanCountryCode(state.user.countryCode || browserCountryCode());
   elements.userName.textContent = name;
-  elements.userProvider.textContent = countryFlag ? `${provider} ${countryFlag}` : provider;
-  elements.userProvider.title = countryFlag ? `${provider} account` : "";
+  elements.userProvider.textContent = "";
+  elements.userProvider.append(provider);
+  if (countryCode) elements.userProvider.append(renderCountryFlag(countryCode));
+  elements.userProvider.title = countryCode ? `${provider} account` : "";
   renderUserAvatar(name);
 }
 
@@ -360,14 +362,21 @@ function browserCountryCode() {
   return "";
 }
 
-function countryFlagEmoji(countryCode) {
+function cleanCountryCode(countryCode) {
   const code = String(countryCode || "").trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(code)) return "";
+  return /^[A-Z]{2}$/.test(code) ? code : "";
+}
 
-  const regionalIndicatorOffset = 0x1f1e6 - 65;
-  return Array.from(code)
-    .map((letter) => String.fromCodePoint(letter.charCodeAt(0) + regionalIndicatorOffset))
-    .join("");
+function renderCountryFlag(countryCode) {
+  const code = countryCode.toLowerCase();
+  const image = document.createElement("img");
+  image.className = "country-flag";
+  image.alt = `${countryCode} flag`;
+  image.loading = "lazy";
+  image.src = `https://flagcdn.com/24x18/${code}.png`;
+  image.srcset = `https://flagcdn.com/48x36/${code}.png 2x`;
+  image.onerror = () => image.remove();
+  return image;
 }
 
 function renderUserAvatar(name) {
