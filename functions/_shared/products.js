@@ -139,7 +139,8 @@ function normalizeStoredProduct(product) {
   const title = cleanText(product.title, 60);
   const seller = cleanText(product.seller, 32);
   const price = Math.max(1, Math.min(9999, Math.round(Number(product.price) || 0)));
-  if (!id || !title || !seller || !price) return null;
+  const paypal = normalizePaypalLink(product.paypal);
+  if (!id || !title || !seller || !price || !paypal) return null;
 
   return {
     id,
@@ -147,6 +148,7 @@ function normalizeStoredProduct(product) {
     seller,
     tags: normalizeProductTags(product.tags),
     price,
+    paypal,
     details: cleanText(product.details, 140),
     image: cleanImage(product.image),
     tag: cleanText(product.tag, 24) || "Post",
@@ -167,6 +169,23 @@ function cleanText(value, maxLength) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLength);
+}
+
+function normalizePaypalLink(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+    if (hostname !== "paypal.me" && hostname !== "paypal.com") return "";
+    if (hostname === "paypal.com" && !url.pathname.toLowerCase().startsWith("/paypalme/")) return "";
+    url.protocol = "https:";
+    url.hash = "";
+    return url.toString().slice(0, 140);
+  } catch {
+    return "";
+  }
 }
 
 function normalizeProductTags(tags) {

@@ -33,7 +33,6 @@ const elements = {
   commentForm: document.querySelector("#commentForm"),
   commentHint: document.querySelector("#commentHint"),
   commentText: document.querySelector("#commentText"),
-  checkoutButton: document.querySelector("#checkoutButton"),
   commentsList: document.querySelector("#commentsList"),
   detailsAge: document.querySelector("#detailsAge"),
   detailsCopy: document.querySelector("#detailsCopy"),
@@ -48,6 +47,7 @@ const elements = {
   googleLoginButton: document.querySelector("#googleLoginButton"),
   itemDetails: document.querySelector("#itemDetails"),
   itemImageFile: document.querySelector("#itemImageFile"),
+  itemPaypal: document.querySelector("#itemPaypal"),
   itemPrice: document.querySelector("#itemPrice"),
   itemSeller: document.querySelector("#itemSeller"),
   itemTags: document.querySelector("#itemTags"),
@@ -60,6 +60,7 @@ const elements = {
   marketTitle: document.querySelector("#marketTitle"),
   navTabs: document.querySelectorAll(".nav-tab"),
   openPostButton: document.querySelector("#openPostButton"),
+  paymentButton: document.querySelector("#paymentButton"),
   postOverlay: document.querySelector("#postOverlay"),
   productGrid: document.querySelector("#productGrid"),
   searchInput: document.querySelector("#searchInput"),
@@ -97,7 +98,7 @@ function bindControls() {
   });
   elements.closePostButton.addEventListener("click", closePostForm);
   elements.closeDetailsButton.addEventListener("click", closeDetails);
-  elements.checkoutButton.addEventListener("click", () => startCheckout(state.activeListingId));
+  elements.paymentButton.addEventListener("click", () => openSellerPayment(state.activeListingId));
   elements.logoutButton.addEventListener("click", logout);
 
   elements.postOverlay.addEventListener("click", (event) => {
@@ -704,9 +705,9 @@ function renderDetails() {
   elements.detailsSeller.textContent = listing.seller || sellerMeta;
   elements.detailsSellerMeta.textContent = sellerMeta;
   elements.sellerRating.textContent = "Comments only";
-  elements.checkoutButton.hidden = isOwner;
-  elements.checkoutButton.disabled = !stripeReady();
-  elements.checkoutButton.textContent = stripeReady() ? "Buy with Stripe" : "Stripe setup needed";
+  elements.paymentButton.hidden = isOwner;
+  elements.paymentButton.disabled = !listing.paypal;
+  elements.paymentButton.textContent = listing.paypal ? "Pay with PayPal" : "No PayPal link";
 
   elements.detailsTags.innerHTML = "";
   for (const tag of getListingTags(listing)) {
@@ -902,12 +903,8 @@ async function addReply(commentId, textValue) {
   }
 }
 
-async function startCheckout(productId, button = elements.checkoutButton) {
+function openSellerPayment(productId, button = elements.paymentButton) {
   if (!requireAuth()) return;
-  if (!stripeReady()) {
-    toast("Stripe payments need STRIPE_SECRET_KEY in the server environment.");
-    return;
-  }
   const listing = state.listings.find((item) => item.id === productId);
   if (!listing) {
     toast("Product was not found.");
@@ -917,29 +914,14 @@ async function startCheckout(productId, button = elements.checkoutButton) {
     toast("You cannot buy your own product.");
     return;
   }
-
-  const previousText = button ? button.textContent : "";
-  if (button) {
-    button.disabled = true;
-    button.textContent = "Opening Stripe...";
+  if (!listing.paypal) {
+    toast("This seller has not added a PayPal link.");
+    return;
   }
 
-  try {
-    const checkout = await sendJson("/api/checkout", "POST", {
-      productId: listing.id,
-      countryCode: cleanCountryCode(state.exchangeRate.countryCode || browserCountryCode()),
-      currency: state.exchangeRate.currency || "USD",
-      returnTo: appReturnUrl()
-    });
-    if (!checkout.url) throw new Error("Stripe did not return a checkout link.");
-    window.location.href = checkout.url;
-  } catch (error) {
-    toast(error.message || "Could not start Stripe checkout.");
-    if (button) {
-      button.disabled = false;
-      button.textContent = previousText || "Buy with Stripe";
-    }
-  }
+  if (button) button.textContent = "Opening PayPal...";
+  window.open(listing.paypal, "_blank", "noopener,noreferrer");
+  if (button) button.textContent = "Pay with PayPal";
 }
 
 async function addListing() {
@@ -954,8 +936,9 @@ async function addListing() {
   const tags = normalizeTags(elements.itemTags.value);
   const price = Number(elements.itemPrice.value);
   const details = elements.itemDetails.value.trim();
+  const paypal = normalizePaypalLink(elements.itemPaypal.value);
 
-  if (!title || !seller || tags.length === 0 || !Number.isFinite(price) || price <= 0) {
+  if (!title || !seller || tags.length === 0 || !Number.isFinite(price) || price <= 0 || !paypal) {
     toast("Fill in the required product fields.");
     return;
   }
@@ -975,6 +958,7 @@ async function addListing() {
     tags,
     price: Math.round(price),
     details,
+    paypal,
     image,
     tag: "Post",
     createdAt: Date.now(),
@@ -1090,9 +1074,9 @@ function renderListings() {
     const card = listingCard(listing);
     const detailsButton = card.querySelector(".details-button");
     if (detailsButton) detailsButton.addEventListener("click", () => openDetails(listing.id));
-    const checkoutButton = card.querySelector("[data-checkout-product]");
-    if (checkoutButton) {
-      checkoutButton.addEventListener("click", () => startCheckout(listing.id, checkoutButton));
+    const paymentButton = card.querySelector("[data-pay-product]");
+    if (paymentButton) {
+      paymentButton.addEventListener("click", () => openSellerPayment(listing.id, paymentButton));
     }
     const removeButton = card.querySelector(".delete-button");
     if (removeButton) removeButton.addEventListener("click", () => removeListing(listing.id));
@@ -1118,7 +1102,7 @@ function listingCard(listing) {
   const seller = document.createElement("strong");
   const actions = document.createElement("div");
   const detailsButton = document.createElement("button");
-  const checkoutButton = document.createElement("button");
+  const paymentButton = document.createElement("button");
   const remove = document.createElement("button");
 
   card.className = "product-card";
@@ -1131,7 +1115,7 @@ function listingCard(listing) {
   sellerRow.className = "seller-row";
   actions.className = "card-actions";
   detailsButton.className = "details-button";
-  checkoutButton.className = "primary-button checkout-card-button";
+  paymentButton.className = "primary-button payment-card-button";
   remove.className = "delete-button full-width";
 
   image.src = validImageUrl(listing.image);
@@ -1151,10 +1135,10 @@ function listingCard(listing) {
   seller.textContent = listing.seller || "Player";
   detailsButton.type = "button";
   detailsButton.textContent = "See Details";
-  checkoutButton.type = "button";
-  checkoutButton.dataset.checkoutProduct = listing.id || "";
-  checkoutButton.disabled = !stripeReady();
-  checkoutButton.textContent = stripeReady() ? "Buy" : "Stripe setup";
+  paymentButton.type = "button";
+  paymentButton.dataset.payProduct = listing.id || "";
+  paymentButton.disabled = !listing.paypal;
+  paymentButton.textContent = listing.paypal ? "PayPal" : "No PayPal";
   remove.type = "button";
   remove.setAttribute("aria-label", "Remove product");
   remove.textContent = "Remove";
@@ -1165,7 +1149,7 @@ function listingCard(listing) {
   sellerRow.append(sellerLabel, seller);
   body.append(titleRow, meta, details, sellerRow);
   actions.append(detailsButton);
-  if (!canRemoveListing(listing)) actions.append(checkoutButton);
+  if (!canRemoveListing(listing)) actions.append(paymentButton);
   if (canRemoveListing(listing)) actions.append(remove);
   body.append(actions);
   card.append(media, body);
@@ -1182,6 +1166,23 @@ function validImageUrl(value) {
     return image;
   }
   return PLACEHOLDER_IMAGE;
+}
+
+function normalizePaypalLink(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+    if (hostname !== "paypal.me" && hostname !== "paypal.com") return "";
+    if (hostname === "paypal.com" && !url.pathname.toLowerCase().startsWith("/paypalme/")) return "";
+    url.protocol = "https:";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return "";
+  }
 }
 
 function filteredListings() {
@@ -1319,10 +1320,6 @@ function currentUserKey() {
 function canRemoveListing(listing) {
   if (!state.user) return false;
   return Boolean(listing.ownerId) && listing.ownerId === currentUserKey();
-}
-
-function stripeReady() {
-  return Boolean(state.authConfig && state.authConfig.stripeConfigured);
 }
 
 function userProductCount() {

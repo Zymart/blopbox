@@ -226,6 +226,11 @@
             <textarea id="itemDetails" maxlength="140" placeholder="Short note about the item"></textarea>
           </label>
 
+          <label>
+            PayPal.me link
+            <input id="itemPaypal" type="url" maxlength="140" placeholder="https://paypal.me/yourname" required>
+          </label>
+
           <button class="primary-button" type="submit">Post Product</button>
         </form>
       </aside>
@@ -251,7 +256,7 @@
               <strong id="detailsPrice">$0</strong>
               <span id="detailsAge"></span>
             </div>
-            <button class="primary-button checkout-button" id="checkoutButton" type="button">Buy with Stripe</button>
+            <button class="primary-button payment-button" id="paymentButton" type="button">Pay with PayPal</button>
             <div class="details-tags" id="detailsTags"></div>
             <p class="details-copy" id="detailsCopy"></p>
 

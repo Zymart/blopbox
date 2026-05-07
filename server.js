@@ -19,7 +19,6 @@ const GOOGLE_REDIRECT_URI =
   process.env.GOOGLE_REDIRECT_URI ||
   `http://localhost:${PORT}/auth/google/callback`;
 const GOOGLE_SCOPES = process.env.GOOGLE_SCOPES || "openid email profile";
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
 const ALLOWED_RETURN_ORIGINS = parseOriginList(
   process.env.FRONTEND_ORIGINS || process.env.ALLOWED_RETURN_ORIGINS || ""
 );
@@ -366,7 +365,8 @@ function normalizeStoredProduct(product) {
   const title = cleanText(product.title, 60);
   const seller = cleanText(product.seller, 32);
   const price = Math.max(1, Math.min(9999, Math.round(Number(product.price) || 0)));
-  if (!id || !title || !seller || !price) return null;
+  const paypal = normalizePaypalLink(product.paypal);
+  if (!id || !title || !seller || !price || !paypal) return null;
 
   return {
     id,
@@ -374,6 +374,7 @@ function normalizeStoredProduct(product) {
     seller,
     tags: normalizeProductTags(product.tags),
     price,
+    paypal,
     details: cleanText(product.details, 140),
     image: cleanImage(product.image),
     tag: cleanText(product.tag, 24) || "Post",
@@ -405,6 +406,23 @@ function cleanText(value, maxLength) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLength);
+}
+
+function normalizePaypalLink(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+    if (hostname !== "paypal.me" && hostname !== "paypal.com") return "";
+    if (hostname === "paypal.com" && !url.pathname.toLowerCase().startsWith("/paypalme/")) return "";
+    url.protocol = "https:";
+    url.hash = "";
+    return url.toString().slice(0, 140);
+  } catch {
+    return "";
+  }
 }
 
 function normalizeProductTags(tags) {
@@ -589,121 +607,6 @@ async function handleProductComment(req, res) {
   }
 }
 
-async function handleCheckout(req, res, url) {
-  if (!stripeConfigured()) {
-    return json(res, 503, { error: "Stripe payments need STRIPE_SECRET_KEY in the server environment." });
-  }
-
-  const session = readSession(req);
-  if (!session) return json(res, 401, { error: "Sign in first." });
-
-  try {
-    const body = await readJsonBody(req, 64 * 1024);
-    const productId = cleanId(body.productId);
-    if (!productId) return json(res, 400, { error: "Product id is required." });
-
-    const products = await readProducts();
-    const product = products.find((item) => item.id === productId);
-    if (!product) return json(res, 404, { error: "Product was not found." });
-    if (canManageProduct(product, session.user)) {
-      return json(res, 403, { error: "You cannot buy your own product." });
-    }
-
-    const countryCode = cleanCountryCode(body.countryCode || session.user.countryCode || clientCountry(req));
-    const requestedCurrency = cleanCurrencyCode(body.currency);
-    const currency = requestedCurrency || currencyForCountry(countryCode);
-    const exchange = currency === "USD"
-      ? { rate: 1, currency: "USD" }
-      : await fetchExchangeRate("USD", currency);
-    const unitAmount = stripeUnitAmount(product.price, exchange.rate, currency);
-    const returnTo = safeReturnUrl(body.returnTo || req.headers.referer || "/", req);
-    const checkout = await createStripeCheckoutSession({
-      product,
-      user: session.user,
-      currency,
-      unitAmount,
-      returnTo,
-      requestUrl: url
-    });
-
-    return json(res, 200, {
-      id: checkout.id,
-      url: checkout.url
-    });
-  } catch (error) {
-    return json(res, error.statusCode || 500, {
-      error: error.message || "Could not start Stripe checkout."
-    });
-  }
-}
-
-async function createStripeCheckoutSession({ product, user, currency, unitAmount, returnTo, requestUrl }) {
-  const successUrl = checkoutReturnUrl(returnTo, "success");
-  const cancelUrl = checkoutReturnUrl(returnTo, "cancel");
-  const params = new URLSearchParams();
-  params.set("mode", "payment");
-  params.set("success_url", successUrl);
-  params.set("cancel_url", cancelUrl);
-  params.set("client_reference_id", product.id);
-  params.set("line_items[0][quantity]", "1");
-  params.set("line_items[0][price_data][currency]", currency.toLowerCase());
-  params.set("line_items[0][price_data][unit_amount]", String(unitAmount));
-  params.set("line_items[0][price_data][product_data][name]", product.title);
-  params.set("line_items[0][price_data][product_data][description]", product.details || `Seller: ${product.seller}`);
-  params.set("line_items[0][price_data][product_data][metadata][product_id]", product.id);
-  params.set("metadata[product_id]", product.id);
-  params.set("metadata[seller_id]", product.ownerId || "");
-  params.set("metadata[buyer_id]", userKey(user));
-  params.set("payment_intent_data[metadata][product_id]", product.id);
-  params.set("payment_intent_data[metadata][seller_id]", product.ownerId || "");
-  params.set("payment_intent_data[metadata][buyer_id]", userKey(user));
-  if (user.email) params.set("customer_email", user.email);
-
-  const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: params
-  });
-  const body = await response.json();
-  if (!response.ok) {
-    const error = new Error(body.error?.message || `Stripe returned ${response.status}`);
-    error.statusCode = response.status;
-    throw error;
-  }
-  if (!body.url) throw new Error("Stripe did not return a checkout link.");
-  return body;
-}
-
-function checkoutReturnUrl(returnTo, status) {
-  const url = new URL(returnTo);
-  url.searchParams.set("checkout", status);
-  return url.toString();
-}
-
-function stripeUnitAmount(price, rate, currency) {
-  const zeroDecimalCurrencies = new Set(["BIF", "CLP", "DJF", "GNF", "JPY", "KMF", "KRW", "MGA", "PYG", "RWF", "UGX", "VND", "VUV", "XAF", "XOF", "XPF"]);
-  const factor = zeroDecimalCurrencies.has(currency) ? 1 : 100;
-  return Math.max(1, Math.round(Number(price || 0) * Number(rate || 1) * factor));
-}
-
-function currencyForCountry(countryCode) {
-  const currencies = {
-    AE: "AED", AR: "ARS", AT: "EUR", AU: "AUD", BD: "BDT", BE: "EUR", BG: "BGN",
-    BH: "BHD", BN: "BND", BR: "BRL", CA: "CAD", CH: "CHF", CL: "CLP", CN: "CNY",
-    CO: "COP", CZ: "CZK", DE: "EUR", DK: "DKK", EG: "EGP", ES: "EUR", FI: "EUR",
-    FR: "EUR", GB: "GBP", GR: "EUR", HK: "HKD", HR: "EUR", HU: "HUF", ID: "IDR",
-    IE: "EUR", IL: "ILS", IN: "INR", IT: "EUR", JP: "JPY", KR: "KRW", KW: "KWD",
-    LK: "LKR", MX: "MXN", MY: "MYR", NG: "NGN", NL: "EUR", NO: "NOK", NZ: "NZD",
-    PH: "PHP", PK: "PKR", PL: "PLN", PT: "EUR", QA: "QAR", RO: "RON", SA: "SAR",
-    SE: "SEK", SG: "SGD", TH: "THB", TR: "TRY", TW: "TWD", US: "USD", VN: "VND",
-    ZA: "ZAR"
-  };
-  return currencies[cleanCountryCode(countryCode)] || "USD";
-}
-
 function readJsonBody(req, maxBytes = 4 * 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let body = "";
@@ -825,14 +728,6 @@ function discordConfigured() {
 
 function googleConfigured() {
   return hasRealValue(GOOGLE_CLIENT_ID) && hasRealValue(GOOGLE_CLIENT_SECRET);
-}
-
-function stripeConfigured() {
-  return (
-    hasRealValue(STRIPE_SECRET_KEY) &&
-    STRIPE_SECRET_KEY.startsWith("sk_") &&
-    !STRIPE_SECRET_KEY.includes("your_stripe")
-  );
 }
 
 async function handleDiscordStart(req, res, url) {
@@ -1077,7 +972,6 @@ async function router(req, res) {
     return json(res, 200, {
       discordConfigured: discordConfigured(),
       googleConfigured: googleConfigured(),
-      stripeConfigured: stripeConfigured(),
       authRequired: true,
       providers: {
         discord: {
@@ -1106,10 +1000,6 @@ async function router(req, res) {
 
   if (req.method === "POST" && url.pathname === "/api/products/comment") {
     return handleProductComment(req, res);
-  }
-
-  if (req.method === "POST" && url.pathname === "/api/checkout") {
-    return handleCheckout(req, res, url);
   }
 
   if (req.method === "GET" && url.pathname === "/auth/discord") {
