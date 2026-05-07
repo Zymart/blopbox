@@ -311,6 +311,7 @@ canvas {
 .text-button:hover,
 .delete-button:hover,
 .details-button:hover,
+.checkout-card-button:hover,
 .upload-button:hover,
 .nav-tab:hover {
   filter: brightness(1.08);
@@ -1102,6 +1103,11 @@ p {
   font-weight: 950;
 }
 
+.checkout-card-button {
+  min-height: 42px;
+  padding: 0 12px;
+}
+
 .full-width {
   width: 100%;
 }
@@ -1330,6 +1336,10 @@ p {
 .details-price-row strong {
   color: var(--green);
   font-size: 1.4rem;
+}
+
+.checkout-button {
+  width: 100%;
 }
 
 .details-price-row span,

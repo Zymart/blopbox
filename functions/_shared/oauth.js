@@ -35,6 +35,7 @@ export async function handleConfig(context) {
   return json({
     discordConfigured: discord.configured,
     googleConfigured: google.configured,
+    stripeConfigured: stripeConfigured(context.env),
     sessionSecretConfigured: hasRealValue(getEnv(context.env, "SESSION_SECRET")),
     authRequired: true,
     providers: {
@@ -479,6 +480,11 @@ function hasRealValue(value) {
       !normalized.startsWith("replace-") &&
       !normalized.includes("your_discord")
   );
+}
+
+function stripeConfigured(env) {
+  const key = getEnv(env, "STRIPE_SECRET_KEY");
+  return hasRealValue(key) && key.startsWith("sk_") && !key.includes("your_stripe");
 }
 
 function isLocalHostname(hostname) {

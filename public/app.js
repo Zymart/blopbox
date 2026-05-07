@@ -33,6 +33,7 @@ const elements = {
   commentForm: document.querySelector("#commentForm"),
   commentHint: document.querySelector("#commentHint"),
   commentText: document.querySelector("#commentText"),
+  checkoutButton: document.querySelector("#checkoutButton"),
   commentsList: document.querySelector("#commentsList"),
   detailsAge: document.querySelector("#detailsAge"),
   detailsCopy: document.querySelector("#detailsCopy"),
@@ -96,6 +97,7 @@ function bindControls() {
   });
   elements.closePostButton.addEventListener("click", closePostForm);
   elements.closeDetailsButton.addEventListener("click", closeDetails);
+  elements.checkoutButton.addEventListener("click", () => startCheckout(state.activeListingId));
   elements.logoutButton.addEventListener("click", logout);
 
   elements.postOverlay.addEventListener("click", (event) => {
@@ -702,6 +704,9 @@ function renderDetails() {
   elements.detailsSeller.textContent = listing.seller || sellerMeta;
   elements.detailsSellerMeta.textContent = sellerMeta;
   elements.sellerRating.textContent = "Comments only";
+  elements.checkoutButton.hidden = isOwner;
+  elements.checkoutButton.disabled = !stripeReady();
+  elements.checkoutButton.textContent = stripeReady() ? "Buy with Stripe" : "Stripe setup needed";
 
   elements.detailsTags.innerHTML = "";
   for (const tag of getListingTags(listing)) {
@@ -897,6 +902,46 @@ async function addReply(commentId, textValue) {
   }
 }
 
+async function startCheckout(productId, button = elements.checkoutButton) {
+  if (!requireAuth()) return;
+  if (!stripeReady()) {
+    toast("Stripe payments need STRIPE_SECRET_KEY in the server environment.");
+    return;
+  }
+  const listing = state.listings.find((item) => item.id === productId);
+  if (!listing) {
+    toast("Product was not found.");
+    return;
+  }
+  if (canRemoveListing(listing)) {
+    toast("You cannot buy your own product.");
+    return;
+  }
+
+  const previousText = button ? button.textContent : "";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Opening Stripe...";
+  }
+
+  try {
+    const checkout = await sendJson("/api/checkout", "POST", {
+      productId: listing.id,
+      countryCode: cleanCountryCode(state.exchangeRate.countryCode || browserCountryCode()),
+      currency: state.exchangeRate.currency || "USD",
+      returnTo: appReturnUrl()
+    });
+    if (!checkout.url) throw new Error("Stripe did not return a checkout link.");
+    window.location.href = checkout.url;
+  } catch (error) {
+    toast(error.message || "Could not start Stripe checkout.");
+    if (button) {
+      button.disabled = false;
+      button.textContent = previousText || "Buy with Stripe";
+    }
+  }
+}
+
 async function addListing() {
   if (!requireAuth()) return;
   if (!canPostProduct()) {
@@ -1045,6 +1090,10 @@ function renderListings() {
     const card = listingCard(listing);
     const detailsButton = card.querySelector(".details-button");
     if (detailsButton) detailsButton.addEventListener("click", () => openDetails(listing.id));
+    const checkoutButton = card.querySelector("[data-checkout-product]");
+    if (checkoutButton) {
+      checkoutButton.addEventListener("click", () => startCheckout(listing.id, checkoutButton));
+    }
     const removeButton = card.querySelector(".delete-button");
     if (removeButton) removeButton.addEventListener("click", () => removeListing(listing.id));
     elements.productGrid.append(card);
@@ -1069,6 +1118,7 @@ function listingCard(listing) {
   const seller = document.createElement("strong");
   const actions = document.createElement("div");
   const detailsButton = document.createElement("button");
+  const checkoutButton = document.createElement("button");
   const remove = document.createElement("button");
 
   card.className = "product-card";
@@ -1081,6 +1131,7 @@ function listingCard(listing) {
   sellerRow.className = "seller-row";
   actions.className = "card-actions";
   detailsButton.className = "details-button";
+  checkoutButton.className = "primary-button checkout-card-button";
   remove.className = "delete-button full-width";
 
   image.src = validImageUrl(listing.image);
@@ -1100,6 +1151,10 @@ function listingCard(listing) {
   seller.textContent = listing.seller || "Player";
   detailsButton.type = "button";
   detailsButton.textContent = "See Details";
+  checkoutButton.type = "button";
+  checkoutButton.dataset.checkoutProduct = listing.id || "";
+  checkoutButton.disabled = !stripeReady();
+  checkoutButton.textContent = stripeReady() ? "Buy" : "Stripe setup";
   remove.type = "button";
   remove.setAttribute("aria-label", "Remove product");
   remove.textContent = "Remove";
@@ -1110,6 +1165,7 @@ function listingCard(listing) {
   sellerRow.append(sellerLabel, seller);
   body.append(titleRow, meta, details, sellerRow);
   actions.append(detailsButton);
+  if (!canRemoveListing(listing)) actions.append(checkoutButton);
   if (canRemoveListing(listing)) actions.append(remove);
   body.append(actions);
   card.append(media, body);
@@ -1263,6 +1319,10 @@ function currentUserKey() {
 function canRemoveListing(listing) {
   if (!state.user) return false;
   return Boolean(listing.ownerId) && listing.ownerId === currentUserKey();
+}
+
+function stripeReady() {
+  return Boolean(state.authConfig && state.authConfig.stripeConfigured);
 }
 
 function userProductCount() {
