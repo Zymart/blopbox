@@ -393,7 +393,6 @@ function normalizeComments(comments) {
       if (!comment || typeof comment !== "object") return null;
       const id = cleanId(comment.id);
       const text = cleanText(comment.text, 220);
-      const rating = normalizeRating(comment.rating);
       const authorId = cleanText(comment.authorId, 120);
       const authorName = cleanText(comment.authorName, 80);
       if (!id || !text || !authorId || !authorName) return null;
@@ -401,7 +400,6 @@ function normalizeComments(comments) {
       return {
         id,
         text,
-        rating,
         authorId,
         authorName,
         authorAvatar: cleanImage(comment.authorAvatar),
@@ -440,21 +438,13 @@ function normalizeReplies(replies) {
     .slice(0, 40);
 }
 
-function normalizeRating(value) {
-  const rating = Math.round(Number(value));
-  if (!Number.isFinite(rating)) return 0;
-  return Math.max(1, Math.min(5, rating));
-}
-
 function sanitizeComment(input, user) {
   const text = cleanText(input && input.text, 220);
-  const rating = normalizeRating(input && input.rating);
   if (!text) return null;
 
   return {
     id: `comment-${Date.now()}-${crypto.randomBytes(5).toString("hex")}`,
     text,
-    rating,
     authorId: userKey(user),
     authorName: user.globalName || user.username || "User",
     authorAvatar: cleanImage(user.avatar),

@@ -336,11 +336,28 @@ function renderProviderButton(provider, button) {
 function renderAccount() {
   const name = state.user.globalName || state.user.username || "Signed in";
   const provider = state.user.provider || "account";
-  const countryFlag = countryFlagEmoji(state.user.countryCode);
+  const countryFlag = countryFlagEmoji(state.user.countryCode || browserCountryCode());
   elements.userName.textContent = name;
   elements.userProvider.textContent = countryFlag ? `${provider} ${countryFlag}` : provider;
   elements.userProvider.title = countryFlag ? `${provider} account` : "";
   renderUserAvatar(name);
+}
+
+function browserCountryCode() {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  const timezoneCountries = {
+    "Asia/Manila": "PH"
+  };
+  if (timezoneCountries[timezone]) return timezoneCountries[timezone];
+
+  try {
+    const locale = new Intl.Locale(navigator.language || "");
+    if (locale.region) return locale.region;
+  } catch {
+    // Fall through to timezone hints when the browser locale has no region.
+  }
+
+  return "";
 }
 
 function countryFlagEmoji(countryCode) {
@@ -558,7 +575,6 @@ function renderDetails() {
   }
 
   const comments = getListingComments(listing);
-  const sellerStats = sellerRatingStats(listing);
   const sellerMeta = listing.ownerName || listing.seller || "Seller";
   const isOwner = canRemoveListing(listing);
 
@@ -574,9 +590,7 @@ function renderDetails() {
   elements.detailsCopy.textContent = listing.details || "No extra details yet.";
   elements.detailsSeller.textContent = listing.seller || sellerMeta;
   elements.detailsSellerMeta.textContent = sellerMeta;
-  elements.sellerRating.textContent = sellerStats.count
-    ? `${stars(Math.round(sellerStats.average))} ${sellerStats.average.toFixed(1)} (${sellerStats.count})`
-    : "No ratings yet";
+  elements.sellerRating.textContent = "Comments only";
 
   elements.detailsTags.innerHTML = "";
   for (const tag of getListingTags(listing)) {
@@ -619,9 +633,7 @@ function renderComments(comments) {
     header.className = "comment-header";
     identity.className = "comment-identity";
     author.textContent = comment.authorName || "User";
-    meta.textContent = comment.rating
-      ? `${stars(comment.rating)} ${timeAgo(Number(comment.createdAt) || Date.now())}`
-      : timeAgo(Number(comment.createdAt) || Date.now());
+    meta.textContent = timeAgo(Number(comment.createdAt) || Date.now());
     text.textContent = comment.text || "";
     actions.className = "comment-actions";
     replyButton.type = "button";
@@ -903,10 +915,10 @@ function renderListings() {
     const empty = document.createElement("div");
     empty.className = "empty-state";
     const emptyTitle =
-      state.mode === "market" ? "No recommended products yet." : "No matching products.";
+      state.mode === "market" ? "No products yet." : "No matching products.";
     const emptyCopy =
       state.mode === "market"
-        ? "Recommendations appear after products receive ratings."
+        ? "Post the first product to start the marketplace."
         : "Try another search or post the first product.";
     empty.innerHTML = `
       <strong>${emptyTitle}</strong>
@@ -1021,8 +1033,7 @@ function filteredListings() {
 
   if (state.mode === "market") {
     return listings
-      .filter((listing) => productRatingStats(listing).count > 0)
-      .sort(sortByRecommendation)
+      .sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0))
       .slice(0, HOME_RECOMMENDATION_LIMIT);
   }
 
@@ -1088,49 +1099,6 @@ function getListingComments(listing) {
   return listing.comments
     .filter((comment) => comment && comment.text)
     .sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
-}
-
-function sellerRatingStats(listing) {
-  const sellerKey = listing.ownerId || "";
-  const sellerName = String(listing.seller || "").toLowerCase();
-  const ratings = [];
-
-  for (const product of state.listings) {
-    const sameSeller = sellerKey
-      ? product.ownerId === sellerKey
-      : String(product.seller || "").toLowerCase() === sellerName;
-    if (!sameSeller) continue;
-
-    for (const comment of getListingComments(product)) {
-      const rating = Number(comment.rating);
-      if (Number.isFinite(rating) && rating > 0) ratings.push(rating);
-    }
-  }
-
-  const total = ratings.reduce((sum, rating) => sum + rating, 0);
-  return {
-    count: ratings.length,
-    average: ratings.length ? total / ratings.length : 0
-  };
-}
-
-function productRatingStats(listing) {
-  const ratings = getListingComments(listing)
-    .map((comment) => Number(comment.rating))
-    .filter((rating) => Number.isFinite(rating) && rating > 0);
-  const total = ratings.reduce((sum, rating) => sum + rating, 0);
-  return {
-    count: ratings.length,
-    average: ratings.length ? total / ratings.length : 0
-  };
-}
-
-function sortByRecommendation(a, b) {
-  const aStats = productRatingStats(a);
-  const bStats = productRatingStats(b);
-  if (bStats.average !== aStats.average) return bStats.average - aStats.average;
-  if (bStats.count !== aStats.count) return bStats.count - aStats.count;
-  return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
 }
 
 function readListings() {
@@ -1205,11 +1173,6 @@ function renderPostLimit() {
     : `${remaining} product post${remaining === 1 ? "" : "s"} left.`;
   elements.sellHeroButton.disabled = disabled;
   elements.sellHeroButton.title = elements.openPostButton.title;
-}
-
-function stars(rating) {
-  const filled = Math.max(0, Math.min(5, Math.round(Number(rating) || 0)));
-  return `${"★".repeat(filled)}${"☆".repeat(5 - filled)}`;
 }
 
 function money(amount) {
