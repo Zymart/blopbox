@@ -267,6 +267,67 @@ function cleanCountryCode(value) {
     .slice(0, 2);
 }
 
+function cleanCurrencyCode(value) {
+  const code = String(value || "").trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(code) ? code : "";
+}
+
+async function handleExchangeRate(req, res, url) {
+  const session = readSession(req);
+  const countryCode = cleanCountryCode(url.searchParams.get("country") || session?.user?.countryCode || clientCountry(req));
+  const currency = cleanCurrencyCode(url.searchParams.get("currency")) || "USD";
+
+  if (currency === "USD") {
+    return json(res, 200, {
+      base: "USD",
+      currency,
+      countryCode,
+      rate: 1
+    });
+  }
+
+  try {
+    const rate = await fetchExchangeRate("USD", currency);
+    return json(res, 200, {
+      base: "USD",
+      currency,
+      countryCode,
+      rate: rate.rate,
+      date: rate.date
+    });
+  } catch (error) {
+    console.error("Exchange rate fetch failed:", error);
+    return json(res, 200, {
+      base: "USD",
+      currency: "USD",
+      countryCode,
+      rate: 1,
+      error: "exchange_rate_unavailable"
+    });
+  }
+}
+
+async function fetchExchangeRate(base, currency) {
+  const url = new URL("https://api.frankfurter.dev/v2/rates");
+  url.searchParams.set("base", base);
+  url.searchParams.set("quotes", currency);
+
+  const response = await fetch(url, {
+    headers: { Accept: "application/json" }
+  });
+  if (!response.ok) throw new Error(`Rate API returned ${response.status}`);
+
+  const body = await response.json();
+  const row = Array.isArray(body) ? body[0] : null;
+  const rate = Number(row && row.rate);
+  if (!Number.isFinite(rate) || rate <= 0) throw new Error(`No ${currency} rate found`);
+
+  return {
+    rate,
+    date: row.date || ""
+  };
+}
+
 function readSession(req) {
   const cookies = parseCookies(req);
   const sessionId = unpackSigned(cookies.market_session);
@@ -908,6 +969,10 @@ async function router(req, res) {
       scopes: DISCORD_SCOPES,
       redirectUri: DISCORD_REDIRECT_URI
     });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/exchange-rate") {
+    return handleExchangeRate(req, res, url);
   }
 
   if (url.pathname === "/api/products") {

@@ -8,6 +8,12 @@ const HOME_RECOMMENDATION_LIMIT = 10;
 const state = {
   authConfig: null,
   authMessage: "",
+  exchangeRate: {
+    base: "USD",
+    currency: "USD",
+    countryCode: "",
+    rate: 1
+  },
   mode: "market",
   query: "",
   sort: "newest",
@@ -72,6 +78,7 @@ init();
 async function init() {
   bindControls();
   await hydrateAuth();
+  await hydrateExchangeRate();
   if (state.user) await hydrateProducts();
   renderAuth();
   activateMode(state.mode);
@@ -213,6 +220,38 @@ async function hydrateAuth() {
   }
 
   clearAuthStatus();
+}
+
+async function hydrateExchangeRate() {
+  const countryCode = cleanCountryCode((state.user && state.user.countryCode) || browserCountryCode());
+  const currency = currencyForCountry(countryCode);
+  state.exchangeRate = {
+    base: "USD",
+    currency,
+    countryCode,
+    rate: 1
+  };
+
+  if (!countryCode || currency === "USD") return;
+
+  try {
+    const params = new URLSearchParams({ country: countryCode, currency });
+    const exchange = await fetchJson(`/api/exchange-rate?${params.toString()}`);
+    state.exchangeRate = {
+      base: exchange.base || "USD",
+      currency: exchange.currency || currency,
+      countryCode: exchange.countryCode || countryCode,
+      rate: Number(exchange.rate) || 1,
+      date: exchange.date || ""
+    };
+  } catch {
+    state.exchangeRate = {
+      base: "USD",
+      currency,
+      countryCode,
+      rate: 1
+    };
+  }
 }
 
 async function fetchJson(path, options = {}) {
@@ -377,6 +416,69 @@ function renderCountryFlag(countryCode) {
   image.srcset = `https://flagcdn.com/48x36/${code}.png 2x`;
   image.onerror = () => image.remove();
   return image;
+}
+
+function currencyForCountry(countryCode) {
+  const currencies = {
+    AE: "AED",
+    AR: "ARS",
+    AT: "EUR",
+    AU: "AUD",
+    BD: "BDT",
+    BE: "EUR",
+    BG: "BGN",
+    BH: "BHD",
+    BN: "BND",
+    BR: "BRL",
+    CA: "CAD",
+    CH: "CHF",
+    CL: "CLP",
+    CN: "CNY",
+    CO: "COP",
+    CZ: "CZK",
+    DE: "EUR",
+    DK: "DKK",
+    EG: "EGP",
+    ES: "EUR",
+    FI: "EUR",
+    FR: "EUR",
+    GB: "GBP",
+    GR: "EUR",
+    HK: "HKD",
+    HR: "EUR",
+    HU: "HUF",
+    ID: "IDR",
+    IE: "EUR",
+    IL: "ILS",
+    IN: "INR",
+    IT: "EUR",
+    JP: "JPY",
+    KR: "KRW",
+    KW: "KWD",
+    LK: "LKR",
+    MX: "MXN",
+    MY: "MYR",
+    NG: "NGN",
+    NL: "EUR",
+    NO: "NOK",
+    NZ: "NZD",
+    PH: "PHP",
+    PK: "PKR",
+    PL: "PLN",
+    PT: "EUR",
+    QA: "QAR",
+    RO: "RON",
+    SA: "SAR",
+    SE: "SEK",
+    SG: "SGD",
+    TH: "THB",
+    TR: "TRY",
+    TW: "TWD",
+    US: "USD",
+    VN: "VND",
+    ZA: "ZAR"
+  };
+  return currencies[cleanCountryCode(countryCode)] || "USD";
 }
 
 function renderUserAvatar(name) {
@@ -1185,11 +1287,18 @@ function renderPostLimit() {
 }
 
 function money(amount) {
+  const exchange = state.exchangeRate || {};
+  const currency = exchange.currency || "USD";
+  const rate = Number(exchange.rate) || 1;
+  const convertedAmount = Number(amount || 0) * rate;
+  const zeroDecimalCurrencies = new Set(["CLP", "HUF", "IDR", "JPY", "KRW", "PHP", "TWD", "VND"]);
+  const maximumFractionDigits = zeroDecimalCurrencies.has(currency) ? 0 : 2;
+
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0
-  }).format(amount);
+    currency,
+    maximumFractionDigits
+  }).format(convertedAmount);
 }
 
 function timeAgo(timestamp) {
